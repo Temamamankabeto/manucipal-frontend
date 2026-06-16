@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { authService } from "@/services/auth/auth.service";
 import { AlertTriangle, Edit, Eye, Plus, RefreshCw, Trash2 } from "lucide-react";
@@ -14,14 +14,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  useBudgetBiCodes,
   useBudgetDetail,
+  useBudgetFiscalYears,
   useBudgets,
   useBudgetTransactions,
   useCreateBudget,
   useDeleteBudget,
   useUpdateBudget,
 } from "@/hooks/budget/use-budget";
-import { usePaymentTypes } from "@/hooks/payment/use-payment-master-data";
 import type { Budget, BudgetPayload } from "@/types/budget/budget.type";
 
 const LOW_BUDGET_THRESHOLD = 5000;
@@ -48,27 +49,29 @@ function money(value: number | string | undefined) {
   });
 }
 
-const emptyForm: BudgetPayload = {
-  bi_code: "04/21/000/152/01/01",
-  reporting_unit: "04/21/000/152/01/01 - Office of Finance and Economic Development - Administration and General Service",
-  bank_account_code: "29 - Mana Qopheessaa",
-  source_of_finance: "1900",
-  budget_type: "1 - Recurrent",
-  budget_code: "",
-  account_name: "",
-  fiscal_year: "2018",
-  allocated_amount: 0,
-  status: "active",
-  description: "",
-};
+function makeEmptyForm(biCode = "", fiscalYear = ""): BudgetPayload {
+  return {
+    bi_code: biCode,
+    reporting_unit: "",
+    bank_account_code: "",
+    source_of_finance: "",
+    budget_type: "",
+    budget_code: "",
+    account_name: "",
+    fiscal_year: fiscalYear,
+    allocated_amount: 0,
+    status: "active",
+    description: "",
+  };
+}
 
 function toForm(budget: Budget): BudgetPayload {
   return {
-    bi_code: budget.bi_code ?? "04/21/000/152/01/01",
+    bi_code: budget.bi_code ?? "",
     reporting_unit: budget.reporting_unit ?? "",
     bank_account_code: budget.bank_account_code ?? "",
-    source_of_finance: budget.source_of_finance ?? "1900",
-    budget_type: budget.budget_type ?? "1 - Recurrent",
+    source_of_finance: budget.source_of_finance ?? "",
+    budget_type: budget.budget_type ?? "",
     budget_code: budget.budget_code,
     account_name: budget.account_name,
     fiscal_year: budget.fiscal_year ?? "",
@@ -81,32 +84,44 @@ function toForm(budget: Budget): BudgetPayload {
 export default function BudgetsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
-  const [biCode, setBiCode] = useState("04/21/000/152/01/01");
-  const [fiscalYear, setFiscalYear] = useState("2018");
+  const [biCode, setBiCode] = useState("all");
+  const [fiscalYear, setFiscalYear] = useState("");
   const [showAggregate, setShowAggregate] = useState(false);
   const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [editing, setEditing] = useState<Budget | null>(null);
   const [viewing, setViewing] = useState<Budget | null>(null);
-  const [form, setForm] = useState<BudgetPayload>(emptyForm);
+  const [form, setForm] = useState<BudgetPayload>(() => makeEmptyForm());
 
   const storedUser = authService.getStoredUser();
   const role = authService.getStoredRoles()[0] ?? storedUser?.role ?? "";
   const normalizedRole = normalizeRole(role);
   const canManageBudget = BUDGET_MANAGER_ROLES.has(normalizedRole);
 
-  const paymentTypesQuery = usePaymentTypes({ per_page: 1000 });
-  const paymentTypes = paymentTypesQuery.data?.data ?? [];
-  const currentAccountDescriptionMissing =
-    Boolean(form.account_name) &&
-    !paymentTypes.some((type) => type.name === form.account_name);
+  const fiscalYearsQuery = useBudgetFiscalYears();
+  const fiscalYears = fiscalYearsQuery.data ?? [];
+  const biCodesQuery = useBudgetBiCodes({ fiscal_year: fiscalYear }, Boolean(fiscalYear));
+  const fetchedBiCodes = biCodesQuery.data ?? [];
+
+  useEffect(() => {
+    if (!fiscalYear && fiscalYears.length > 0) {
+      setFiscalYear(String(fiscalYears[0]));
+    }
+  }, [fiscalYear, fiscalYears]);
+
+  useEffect(() => {
+    if (!showAggregate && biCode !== "all" && fetchedBiCodes.length > 0 && !fetchedBiCodes.includes(biCode)) {
+      setBiCode("all");
+      setPage(1);
+    }
+  }, [biCode, fetchedBiCodes, showAggregate]);
 
   const budgetsQuery = useBudgets({
     search,
     status,
-    bi_code: showAggregate ? "all" : biCode,
-    fiscal_year: fiscalYear,
+    bi_code: showAggregate || biCode === "all" ? undefined : biCode,
+    fiscal_year: fiscalYear || undefined,
     page,
     per_page: 15,
     aggregate: showAggregate,
@@ -152,10 +167,10 @@ export default function BudgetsPage() {
   const meta = budgetsQuery.data?.meta;
 
   const uniqueBiCodes = useMemo(() => {
-    const codes = new Set<string>([biCode]);
+    const codes = new Set<string>(fetchedBiCodes.map(String));
     budgets.forEach((budget) => budget.bi_code && codes.add(budget.bi_code));
-    return Array.from(codes).filter(Boolean);
-  }, [biCode, budgets]);
+    return Array.from(codes).filter(Boolean).sort();
+  }, [budgets, fetchedBiCodes]);
 
   const lowBudgets = budgets.filter((budget) => Number(budget.remaining_amount) < LOW_BUDGET_THRESHOLD && budget.status === "active");
 
@@ -168,7 +183,7 @@ export default function BudgetsPage() {
 
   const resetForm = () => {
     setEditing(null);
-    setForm({ ...emptyForm, bi_code: biCode, fiscal_year: fiscalYear });
+    setForm(makeEmptyForm(biCode === "all" ? "" : biCode, fiscalYear));
     setFormOpen(false);
   };
 
@@ -188,7 +203,7 @@ export default function BudgetsPage() {
   function openCreate() {
     if (!canManageBudget) return;
     setEditing(null);
-    setForm({ ...emptyForm, bi_code: biCode, fiscal_year: fiscalYear });
+    setForm(makeEmptyForm(biCode === "all" ? "" : biCode, fiscalYear));
     setFormOpen(true);
   }
 
@@ -206,11 +221,6 @@ export default function BudgetsPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault();
-
-    if (!form.account_name) {
-      toast.error("Please select Account Description from Payment Type.");
-      return;
-    }
 
     if (!canManageBudget) {
       toast.error("You have view-only access to Budget Management.");
@@ -266,13 +276,13 @@ export default function BudgetsPage() {
         <div className="bg-[#073763] px-4 py-2 text-center text-xl font-bold text-white">Report - Recurrent Expenditure</div>
         <div className="grid border-b text-sm md:grid-cols-2">
           <div className="border-b p-2 font-semibold md:border-r">
-            Reporting Unit : {budgets[0]?.reporting_unit ?? form.reporting_unit}
+            Reporting Unit : {showAggregate ? "Aggregated from all BI Codes" : budgets[0]?.reporting_unit ?? "-"}
           </div>
-          <div className="border-b p-2 font-semibold">Bank Account Code : {budgets[0]?.bank_account_code ?? form.bank_account_code}</div>
-          <div className="border-b p-2 font-semibold md:border-r">Fiscal Year : {fiscalYear}</div>
-          <div className="border-b p-2 font-semibold">Source of Finance: {budgets[0]?.source_of_finance ?? "1900"}</div>
-          <div className="p-2 font-semibold md:border-r">BI Code: <span className="text-red-600">{showAggregate ? "Aggregate - All BI Codes" : biCode}</span></div>
-          <div className="p-2 font-semibold">Budget Type: {budgets[0]?.budget_type ?? "1 - Recurrent"}</div>
+          <div className="border-b p-2 font-semibold">Bank Account Code : {budgets[0]?.bank_account_code ?? "-"}</div>
+          <div className="border-b p-2 font-semibold md:border-r">Fiscal Year : {fiscalYear || "-"}</div>
+          <div className="border-b p-2 font-semibold">Source of Finance: {budgets[0]?.source_of_finance ?? "-"}</div>
+          <div className="p-2 font-semibold md:border-r">BI Code: <span className="text-red-600">{showAggregate ? "Aggregate - All BI Codes" : biCode === "all" ? "All BI Codes" : biCode}</span></div>
+          <div className="p-2 font-semibold">Budget Type: {budgets[0]?.budget_type ?? "-"}</div>
         </div>
 
         <div className="grid gap-3 border-b p-3 md:grid-cols-5">
@@ -284,27 +294,54 @@ export default function BudgetsPage() {
             }}
             placeholder="Search account code, BI code, or description"
           />
-          <Input
-            list="bi-codes"
-            value={showAggregate ? "Aggregate - All BI Codes" : biCode}
+          <Select
+            value={showAggregate ? "aggregate" : biCode}
             disabled={showAggregate}
-            onChange={(event) => {
-              setBiCode(event.target.value);
+            onValueChange={(value) => {
+              setBiCode(value);
               setPage(1);
             }}
-            placeholder="Filter by BI Code"
-          />
-          <datalist id="bi-codes">
-            {uniqueBiCodes.map((code) => <option key={code} value={code} />)}
-          </datalist>
-          <Input
-            value={fiscalYear}
-            onChange={(event) => {
-              setFiscalYear(event.target.value);
-              setPage(1);
-            }}
-            placeholder="Fiscal Year"
-          />
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by BI Code" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All BI Codes</SelectItem>
+              {uniqueBiCodes.map((code) => (
+                <SelectItem key={code} value={code}>{code}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {fiscalYears.length > 0 ? (
+            <Select
+              value={fiscalYear || "all"}
+              onValueChange={(value) => {
+                setFiscalYear(value === "all" ? "" : value);
+                setBiCode("all");
+                setPage(1);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Fiscal Year" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Fiscal Years</SelectItem>
+                {fiscalYears.map((year) => (
+                  <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              value={fiscalYear}
+              onChange={(event) => {
+                setFiscalYear(event.target.value);
+                setBiCode("all");
+                setPage(1);
+              }}
+              placeholder="Fiscal Year"
+            />
+          )}
           <Select value={status} onValueChange={(value) => { setStatus(value); setPage(1); }}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -313,7 +350,7 @@ export default function BudgetsPage() {
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
-          <Button type="button" variant="outline" onClick={() => { setSearch(""); setStatus("all"); setPage(1); }}>Reset</Button>
+          <Button type="button" variant="outline" onClick={() => { setSearch(""); setStatus("all"); setBiCode("all"); setFiscalYear(fiscalYears[0] ? String(fiscalYears[0]) : ""); setPage(1); }}>Reset</Button>
         </div>
 
         <div className="overflow-x-auto">
@@ -418,31 +455,7 @@ export default function BudgetsPage() {
             </div>
             <div>
               <Label>Account Description</Label>
-              <Select
-                value={form.account_name || undefined}
-                onValueChange={(value) =>
-                  setForm((current) => ({
-                    ...current,
-                    account_name: value,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={paymentTypesQuery.isLoading ? "Loading payment types..." : "Select payment type"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {currentAccountDescriptionMissing ? (
-                    <SelectItem value={form.account_name}>
-                      {form.account_name}
-                    </SelectItem>
-                  ) : null}
-                  {paymentTypes.map((type) => (
-                    <SelectItem key={type.id} value={type.name}>
-                      {type.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input required value={form.account_name} onChange={(event) => setForm((current) => ({ ...current, account_name: event.target.value }))} placeholder="Salaries to permanent staff" />
             </div>
             <div>
               <Label>Adjusted Budget</Label>

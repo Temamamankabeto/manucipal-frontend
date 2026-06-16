@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
@@ -13,10 +14,13 @@ function money(value: number | string | undefined) {
 }
 
 export default function BudgetTransactionsPage() {
+  const searchParams = useSearchParams();
+  const budgetId = searchParams.get("budget_id") ?? undefined;
+  const initialFiscalYear = searchParams.get("fiscal_year") || "all";
   const [type, setType] = useState("all");
-  const [fiscalYear, setFiscalYear] = useState("all");
+  const [fiscalYear, setFiscalYear] = useState(initialFiscalYear);
   const [page, setPage] = useState(1);
-  const transactionsQuery = useBudgetTransactions({ type, fiscal_year: fiscalYear, page, per_page: 10 });
+  const transactionsQuery = useBudgetTransactions({ budget_id: budgetId, type, fiscal_year: fiscalYear, page, per_page: 10 });
   const transactions = transactionsQuery.data?.data ?? [];
   const meta = transactionsQuery.data?.meta;
   const lastPage = meta?.last_page ?? 1;
@@ -29,13 +33,14 @@ export default function BudgetTransactionsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Budget Transactions</h1>
-        <p className="text-sm text-muted-foreground">Audit trail for budget deductions, reversals, and adjustments by fiscal year.</p>
+        <p className="text-sm text-muted-foreground">Audit trail for budget deductions, reversals, and adjustments by fiscal year.{budgetId ? " Filtered by selected budget." : ""}</p>
       </div>
 
       <Card>
         <CardHeader><CardTitle>Transactions</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
+            {budgetId && <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm font-medium">Budget ID: {budgetId}</div>}
             <Select value={type} onValueChange={setType}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
