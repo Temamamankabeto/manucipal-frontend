@@ -86,6 +86,14 @@ const ACTIONS: Record<string, Record<string, WorkflowAction[]>> = {
     ],
   },
   manager: {
+    draft: [
+      {
+        action: "submit",
+        label: "Submit Request",
+        note: "Submitted to selected head",
+        icon: Send,
+      },
+    ],
     executive_review: [
       {
         action: "manager_approve",
@@ -135,6 +143,14 @@ const ACTIONS: Record<string, Record<string, WorkflowAction[]>> = {
     ],
   },
   "planning-budget-team-leader": {
+    draft: [
+      {
+        action: "submit",
+        label: "Submit Request",
+        note: "Submitted to selected head",
+        icon: Send,
+      },
+    ],
     budget_review: [
       {
         action: "assign_budget_code",
@@ -152,6 +168,14 @@ const ACTIONS: Record<string, Record<string, WorkflowAction[]>> = {
     ],
   },
   "records-office": {
+    draft: [
+      {
+        action: "submit",
+        label: "Submit Request",
+        note: "Submitted to selected head",
+        icon: Send,
+      },
+    ],
     records_review: [
       {
         action: "records_process",

@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateProcurementRequest } from "@/hooks/procurement/use-procurement";
 import { useProcurementCategories, useProcurementTypes } from "@/hooks/procurement/use-procurement-master-data";
 import { authService } from "@/services/auth/auth.service";
@@ -20,7 +21,20 @@ function normalizeRole(role?: string | null) {
 
 function canCreateProcurement() {
   const role = normalizeRole(authService.getStoredRoles()[0] || authService.getStoredUser()?.role);
-  return ["procurement-requester", "records-office", "super-admin"].includes(role);
+
+  return [
+    "manager",
+    "head-of-development-branch",
+    "head-development-branch",
+    "head-of-service-branch",
+    "head-service-branch",
+    "planning-budget-team-leader",
+    "planning-and-budget-team-leader",
+    "procurement-requester",
+    "record-office",
+    "records-office",
+    "super-admin",
+  ].includes(role);
 }
 
 export default function CreateProcurementPage() {
@@ -116,41 +130,53 @@ export default function CreateProcurementPage() {
 
           <div>
             <Label>Procurement Category</Label>
-            <select
-              required
-              className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <Select
               value={categoryId}
-              onChange={(event) => {
-                setCategoryId(event.target.value);
+              onValueChange={(value) => {
+                setCategoryId(value);
                 setProcurementTypeId("");
               }}
               disabled={categoriesQuery.isLoading}
             >
-              <option value="">Select category</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder={categoriesQuery.isLoading ? "Loading categories..." : "Select category"} />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={String(category.id)}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
             <Label>Procurement Type</Label>
-            <select
-              required
-              className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <Select
               value={procurementTypeId}
-              onChange={(event) => setProcurementTypeId(event.target.value)}
+              onValueChange={setProcurementTypeId}
               disabled={!categoryId || typesQuery.isLoading}
             >
-              <option value="">Select type</option>
-              {types.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="mt-2">
+                <SelectValue
+                  placeholder={
+                    !categoryId
+                      ? "Select category first"
+                      : typesQuery.isLoading
+                        ? "Loading types..."
+                        : "Select type"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {types.map((type) => (
+                  <SelectItem key={type.id} value={String(type.id)}>
+                    {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="md:col-span-2">

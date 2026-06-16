@@ -20,7 +20,6 @@ export type AdminLevel = "city" | "subcity" | "woreda" | "zone";
 
 export type SidebarChildItem = {
   label: string;
-  labelKey?: string;
   href: string;
   permission?: string;
   levels?: AdminLevel[];
@@ -29,7 +28,6 @@ export type SidebarChildItem = {
 
 export type SidebarItem = {
   label: string;
-  labelKey?: string;
   href?: string;
   icon: LucideIcon;
   permission?: string;
@@ -40,7 +38,6 @@ export type SidebarItem = {
 
 export type SidebarSection = {
   title: string;
-  titleKey?: string;
   items: SidebarItem[];
 };
 
@@ -51,151 +48,12 @@ export type RoleSidebar = {
   sections: SidebarSection[];
 };
 
-const paymentsChild: SidebarChildItem = {
-  label: "Payments",
-  labelKey: "sidebar.payments",
-  href: "/dashboard/payment",
-};
-
-const paymentCategoriesChild: SidebarChildItem = {
-  label: "Payment Categories",
-  labelKey: "sidebar.payment_categories",
-  href: "/dashboard/payment-categories",
-};
-
-const paymentTypesChild: SidebarChildItem = {
-  label: "Payment Types",
-  labelKey: "sidebar.payment_types",
-  href: "/dashboard/payment-types",
-};
-
-const procurementsChild: SidebarChildItem = {
-  label: "Procurements",
-  labelKey: "sidebar.procurements",
-  href: "/dashboard/procurement",
-};
-
-const budgetsChild: SidebarChildItem = {
-  label: "Budgets",
-  labelKey: "sidebar.budgets",
-  href: "/dashboard/budgets",
-};
-
-const usersChild: SidebarChildItem = {
-  label: "Users",
-  labelKey: "sidebar.users",
-  href: "/dashboard/users",
-  permission: "users.view",
-};
-
-const rolesPermissionsChild: SidebarChildItem = {
-  label: "Roles & Permissions",
-  labelKey: "sidebar.roles_permissions",
-  href: "/dashboard/users/roles",
-  permission: "roles.view",
-};
-
-const translationsChild: SidebarChildItem = {
-  label: "Translations",
-  labelKey: "sidebar.translations",
-  href: "/dashboard/translations",
-  permission: "translations.view",
-};
-
-const paymentReportChild: SidebarChildItem = {
-  label: "Payment Report",
-  labelKey: "sidebar.payment_report",
-  href: "/dashboard/reports/procurement-payment?type=payment",
-};
-
-const procurementReportChild: SidebarChildItem = {
-  label: "Procurement Report",
-  labelKey: "sidebar.procurement_report",
-  href: "/dashboard/reports/procurement-payment?type=procurement",
-};
-
-const paymentManagementSection = (children: SidebarChildItem[]): SidebarSection => ({
-  title: "Payment Management",
-  titleKey: "sidebar.payment_management",
-  items: [
-    {
-      label: "Payments",
-      labelKey: "sidebar.payments",
-      icon: CreditCard,
-      children,
-    },
-  ],
-});
-
-const procurementManagementSection = (children: SidebarChildItem[]): SidebarSection => ({
-  title: "Procurement Management",
-  titleKey: "sidebar.procurement_management",
-  items: [
-    {
-      label: "Procurements",
-      labelKey: "sidebar.procurements",
-      icon: ClipboardList,
-      children,
-    },
-  ],
-});
-
-const budgetManagementSection = (children: SidebarChildItem[]): SidebarSection => ({
-  title: "Budget Management",
-  titleKey: "sidebar.budget_management",
-  items: [
-    {
-      label: "Budgets",
-      labelKey: "sidebar.budgets",
-      icon: WalletCards,
-      children,
-    },
-  ],
-});
-
-const userManagementSection = (
-  children: SidebarChildItem[] = [usersChild]
-): SidebarSection => ({
-  title: "User Management",
-  titleKey: "sidebar.user_management",
-  items: [
-    {
-      label: "Users",
-      labelKey: "sidebar.users",
-      icon: Users,
-      children,
-    },
-  ],
-});
-
-const reportSection = (children: SidebarChildItem[]): SidebarSection => ({
-  title: "Report",
-  titleKey: "sidebar.report",
-  items: [
-    {
-      label: "Reports",
-      labelKey: "sidebar.reports",
-      icon: BarChart3,
-      children,
-    },
-  ],
-});
-
-const paymentProcurementReportSection = reportSection([
-  paymentReportChild,
-  procurementReportChild,
-]);
-
-const procurementOnlyReportSection = reportSection([procurementReportChild]);
-
 const sections: SidebarSection[] = [
   {
     title: "Main",
-    titleKey: "sidebar.main",
     items: [
       {
         label: "Dashboard",
-        labelKey: "sidebar.dashboard",
         href: "/dashboard",
         icon: LayoutDashboard,
       },
@@ -203,25 +61,21 @@ const sections: SidebarSection[] = [
   },
   {
     title: "Citizen Management",
-    titleKey: "sidebar.citizen_management",
     items: [
       {
         label: "Citizen Dashboard",
-        labelKey: "sidebar.citizen_dashboard",
         href: "/dashboard/citizen-dashboard",
         icon: LayoutDashboard,
         permission: "dashboard.citizens.view",
       },
       {
         label: "Citizens",
-        labelKey: "sidebar.citizens",
         href: "/dashboard/citizens",
         icon: IdCard,
         permission: "citizens.read",
       },
       {
         label: "Register Citizen",
-        labelKey: "sidebar.register_citizen",
         href: "/dashboard/citizens/create",
         icon: IdCard,
         permission: "citizens.create",
@@ -229,47 +83,40 @@ const sections: SidebarSection[] = [
       },
       {
         label: "Verification Workflow",
-        labelKey: "sidebar.verification_workflow",
         icon: ShieldCheck,
         children: [
           {
             label: "Pending Review",
-            labelKey: "sidebar.pending_review",
             href: "/dashboard/citizens/pending",
             permission: "citizens.workflow.review",
             levels: ["woreda"],
           },
           {
             label: "Document Verification",
-            labelKey: "sidebar.document_verification",
             href: "/dashboard/citizens/verification",
             permission: "citizens.workflow.verify-documents",
             levels: ["woreda"],
           },
           {
             label: "Woreda Verification",
-            labelKey: "sidebar.woreda_verification",
             href: "/dashboard/citizens/verification",
             permission: "citizens.workflow.woreda-verify",
             levels: ["woreda"],
           },
           {
             label: "Citizen Approval",
-            labelKey: "sidebar.citizen_approval",
             href: "/dashboard/citizens/approval",
             permission: "citizens.workflow.subcity-approve",
             levels: ["subcity"],
           },
           {
             label: "ID Generation / Activation",
-            labelKey: "sidebar.id_generation_activation",
             href: "/dashboard/citizens/approval",
             permission: "citizens.workflow.generate-id",
             levels: ["city"],
           },
           {
             label: "Duplicate Cases",
-            labelKey: "sidebar.duplicate_cases",
             href: "/dashboard/citizens/duplicates",
             permission: "citizens.workflow.flag",
             levels: ["woreda", "subcity", "city"],
@@ -278,7 +125,6 @@ const sections: SidebarSection[] = [
       },
       {
         label: "Households",
-        labelKey: "sidebar.households",
         href: "/dashboard/households",
         icon: Home,
         permission: "households.read",
@@ -288,53 +134,45 @@ const sections: SidebarSection[] = [
   },
   {
     title: "Procurement & Payment",
-    titleKey: "sidebar.procurement_payment",
     items: [
       {
         label: "Procurement",
-        labelKey: "sidebar.procurement",
         href: "/dashboard/procurement",
         icon: ClipboardList,
         permission: "procurement.view",
       },
       {
         label: "Create Procurement",
-        labelKey: "sidebar.create_procurement",
         href: "/dashboard/procurement/create",
         icon: FileText,
         permission: "procurement.create",
       },
       {
         label: "Payment",
-        labelKey: "sidebar.payment",
         href: "/dashboard/payment",
         icon: CreditCard,
         permission: "payment.view",
       },
       {
         label: "Create Payment",
-        labelKey: "sidebar.create_payment",
         href: "/dashboard/payment/create",
         icon: FileText,
         permission: "payment.create",
       },
       {
         label: "Payment Categories",
-        labelKey: "sidebar.payment_categories",
         href: "/dashboard/payment-categories",
         icon: CreditCard,
         permission: "payment.view",
       },
       {
         label: "Payment Types",
-        labelKey: "sidebar.payment_types",
         href: "/dashboard/payment-types",
         icon: FileText,
         permission: "payment.view",
       },
       {
         label: "Procurement & Payment Reports",
-        labelKey: "sidebar.procurement_payment_reports",
         href: "/dashboard/reports/procurement-payment",
         icon: BarChart3,
         permission: "reports.view",
@@ -343,32 +181,27 @@ const sections: SidebarSection[] = [
   },
   {
     title: "Administration",
-    titleKey: "sidebar.administration",
     items: [
       {
         label: "User Management",
-        labelKey: "sidebar.user_management",
         icon: Users,
         permission: "users.read",
         levels: ["city", "subcity", "woreda"],
         children: [
           {
             label: "Users",
-            labelKey: "sidebar.users",
             href: "/dashboard/users",
             permission: "users.read",
             levels: ["city", "subcity", "woreda"],
           },
           {
             label: "Roles",
-            labelKey: "sidebar.roles",
             href: "/dashboard/users/roles",
             permission: "roles.view",
             superOnly: true,
           },
           {
             label: "Permissions",
-            labelKey: "sidebar.permissions",
             href: "/dashboard/users/permissions",
             permission: "permissions.view",
             superOnly: true,
@@ -377,7 +210,6 @@ const sections: SidebarSection[] = [
       },
       {
         label: "Locations",
-        labelKey: "sidebar.locations",
         href: "/dashboard/locations",
         icon: MapPinned,
         permission: "offices.read",
@@ -385,14 +217,12 @@ const sections: SidebarSection[] = [
       },
       {
         label: "Notifications",
-        labelKey: "sidebar.notifications",
         href: "/dashboard/notifications",
         icon: Bell,
         permission: "notifications.read",
       },
       {
         label: "Citizen Reports",
-        labelKey: "sidebar.citizen_reports",
         href: "/dashboard/reports/citizens",
         icon: BarChart3,
         permission: "reports.citizens.view",
@@ -401,6 +231,69 @@ const sections: SidebarSection[] = [
     ],
   },
 ];
+
+const paymentManagementSection = (children: SidebarChildItem[]): SidebarSection => ({
+  title: "Payment Management",
+  items: [{ label: "Payments", icon: CreditCard, children }],
+});
+
+const procurementManagementSection = (children: SidebarChildItem[]): SidebarSection => ({
+  title: "Procurement Management",
+  items: [{ label: "Procurements", icon: ClipboardList, children }],
+});
+
+const budgetManagementSection = (children: SidebarChildItem[]): SidebarSection => ({
+  title: "Budget Management",
+  items: [{ label: "Budgets", icon: WalletCards, children }],
+});
+
+const usersChild: SidebarChildItem = { label: "Users", href: "/dashboard/users", permission: "users.view" };
+
+const userManagementSection = (children: SidebarChildItem[] = [usersChild]): SidebarSection => ({
+  title: "User Management",
+  items: [
+    {
+      label: "Users",
+      icon: Users,
+      children,
+    },
+  ],
+});
+
+const reportSection = (children: SidebarChildItem[]): SidebarSection => ({
+  title: "Report",
+  items: [{ label: "Reports", icon: BarChart3, children }],
+});
+
+const paymentsChild: SidebarChildItem = { label: "Payments", href: "/dashboard/payment" };
+const paymentCategoriesChild: SidebarChildItem = { label: "Payment Categories", href: "/dashboard/payment-categories" };
+const paymentTypesChild: SidebarChildItem = { label: "Payment Types", href: "/dashboard/payment-types" };
+const procurementsChild: SidebarChildItem = { label: "Procurements", href: "/dashboard/procurement" };
+const procurementCategoriesChild: SidebarChildItem = {
+  label: "Procurement Categories",
+  href: "/dashboard/procurement-categories",
+  permission: "procurement.view",
+};
+const procurementTypesChild: SidebarChildItem = {
+  label: "Procurement Types",
+  href: "/dashboard/procurement-types",
+  permission: "procurement.view",
+};
+const paymentReportChild: SidebarChildItem = { label: "Payment Report", href: "/dashboard/reports/procurement-payment?type=payment" };
+const procurementReportChild: SidebarChildItem = { label: "Procurement Report", href: "/dashboard/reports/procurement-payment?type=procurement" };
+const budgetsChild: SidebarChildItem = { label: "Budgets", href: "/dashboard/budgets" };
+const rolesPermissionsChild: SidebarChildItem = {
+  label: "Roles & Permissions",
+  href: "/dashboard/users/roles",
+  permission: "roles.view",
+};
+
+const paymentProcurementReportSection = reportSection([
+  paymentReportChild,
+  procurementReportChild,
+]);
+
+const procurementOnlyReportSection = reportSection([procurementReportChild]);
 
 const roleSpecificSections: Record<string, SidebarSection[]> = {
   "planning-budget-expert": [
@@ -434,14 +327,10 @@ const roleSpecificSections: Record<string, SidebarSection[]> = {
     paymentProcurementReportSection,
   ],
   manager: [
-    paymentManagementSection([
-      paymentsChild,
-      paymentCategoriesChild,
-      paymentTypesChild,
-    ]),
-    procurementManagementSection([procurementsChild]),
+    paymentManagementSection([paymentsChild, paymentCategoriesChild, paymentTypesChild]),
+    procurementManagementSection([procurementsChild, procurementCategoriesChild, procurementTypesChild]),
     budgetManagementSection([budgetsChild]),
-    userManagementSection([usersChild, rolesPermissionsChild, translationsChild]),
+    userManagementSection([usersChild, rolesPermissionsChild]),
     paymentProcurementReportSection,
   ],
   "head-of-development-branch": [
@@ -476,8 +365,12 @@ const roleSpecificSections: Record<string, SidebarSection[]> = {
     paymentManagementSection([paymentsChild]),
     procurementManagementSection([procurementsChild]),
   ],
-  "payment-requester": [paymentManagementSection([paymentsChild])],
-  "procurement-requester": [procurementManagementSection([procurementsChild])],
+  "payment-requester": [
+    paymentManagementSection([paymentsChild]),
+  ],
+  "procurement-requester": [
+    procurementManagementSection([procurementsChild]),
+  ],
   "machinery-team-leader": [
     procurementManagementSection([procurementsChild]),
     procurementOnlyReportSection,
@@ -486,9 +379,15 @@ const roleSpecificSections: Record<string, SidebarSection[]> = {
     procurementManagementSection([procurementsChild]),
     procurementOnlyReportSection,
   ],
-  "finance-accountant": [paymentManagementSection([paymentsChild])],
-  accountant: [paymentManagementSection([paymentsChild])],
-  finance: [paymentManagementSection([paymentsChild])],
+  "finance-accountant": [
+    paymentManagementSection([paymentsChild]),
+  ],
+  accountant: [
+    paymentManagementSection([paymentsChild]),
+  ],
+  finance: [
+    paymentManagementSection([paymentsChild]),
+  ],
 };
 
 function normalizeRoleForSidebar(role?: string | null) {
@@ -524,10 +423,7 @@ function isSuperAdminRole(role?: string | null) {
   return String(role ?? "").toLowerCase().includes("super");
 }
 
-function allowedByPermission(
-  permission: string | undefined,
-  permissions: string[]
-) {
+function allowedByPermission(permission: string | undefined, permissions: string[]) {
   if (!permission) return true;
 
   if (permissions.includes("*") || permissions.includes("all")) {

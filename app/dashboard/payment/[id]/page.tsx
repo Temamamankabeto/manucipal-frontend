@@ -21,11 +21,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { usePaymentAction, usePaymentRequest } from "@/hooks/payment/use-payment";
-import { usePaymentTypeBudgetBalance } from "@/hooks/budget/use-budget";
+import {
+  usePaymentAction,
+  usePaymentRequest,
+} from "@/hooks/payment/use-payment";
+import {
+  useBudgetAccountCodes,
+  useBudgetBiCodes,
+  useBudgetFiscalYears,
+  usePaymentTypeBudgetBalance,
+} from "@/hooks/budget/use-budget";
 import { authService } from "@/services/auth/auth.service";
 import { paymentService } from "@/services/payment/payment.service";
-import { PerDiemExpertWorkspace, PerDiemPrintableEmployees } from "@/components/payment/per-diem-expert-workspace";
+import {
+  PerDiemExpertWorkspace,
+  PerDiemPrintableEmployees,
+} from "@/components/payment/per-diem-expert-workspace";
 
 type WorkflowAction = {
   action: string;
@@ -34,7 +45,6 @@ type WorkflowAction = {
   variant?: "outline" | "destructive";
   icon?: React.ElementType;
 };
-
 
 const draftSubmitActions = {
   draft: [
@@ -213,7 +223,10 @@ function resolveRole(role: string) {
 }
 
 function baseUrl() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL?.replace("/api", "") || "http://127.0.0.1:8000";
+  return (
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace("/api", "") ||
+    "http://127.0.0.1:8000"
+  );
 }
 
 function fileUrl(path?: string | null) {
@@ -239,8 +252,13 @@ function relationName(value: any, fallback = "-") {
 }
 
 function isPerDiemType(payment: any) {
-  const value = `${relationName(payment?.payment_type, payment?.request_type || "")} ${payment?.request_type || ""}`.toLowerCase();
-  return value.includes("per diem") || value.includes("per-diem") || value.includes("durgoo");
+  const value =
+    `${relationName(payment?.payment_type, payment?.request_type || "")} ${payment?.request_type || ""}`.toLowerCase();
+  return (
+    value.includes("per diem") ||
+    value.includes("per-diem") ||
+    value.includes("durgoo")
+  );
 }
 
 function formatDate(value?: string | null) {
@@ -279,7 +297,9 @@ function TiterImage({
   const titer = signerUrl(signer, "titer");
   if (!titer) return null;
 
-  return <img src={titer} alt="titer" className={`object-contain ${className}`} />;
+  return (
+    <img src={titer} alt="titer" className={`object-contain ${className}`} />
+  );
 }
 
 function SignerImages({
@@ -299,7 +319,11 @@ function SignerImages({
   if (!signature && !titer) return null;
 
   const alignClass =
-    align === "end" ? "items-end" : align === "start" ? "items-start" : "items-center";
+    align === "end"
+      ? "items-end"
+      : align === "start"
+        ? "items-start"
+        : "items-center";
 
   return (
     <div className={`flex flex-col ${alignClass} gap-0.5 ${className}`}>
@@ -339,7 +363,9 @@ function HistorySignature({ actor }: { actor?: any }) {
 export default function PaymentDetailPage() {
   const id = String(useParams().id);
   const query = usePaymentRequest(id);
-  const actionMutation = usePaymentAction(() => toast.success("Workflow updated"));
+  const actionMutation = usePaymentAction(() =>
+    toast.success("Workflow updated"),
+  );
 
   const [note, setNote] = useState("");
   const [editableItems, setEditableItems] = useState<any[]>([]);
@@ -378,6 +404,29 @@ export default function PaymentDetailPage() {
     Boolean(data?.payment_type_id && data?.status === "budget_tl_review"),
   );
 
+  const budgetFiscalYearsQuery = useBudgetFiscalYears();
+
+  const budgetBiCodesQuery = useBudgetBiCodes(
+    { fiscal_year: budgetYear || data?.budget_year || undefined },
+    Boolean(
+      data?.status === "budget_expert_processing" &&
+      (budgetYear || data?.budget_year),
+    ),
+  );
+
+  const budgetAccountCodesQuery = useBudgetAccountCodes(
+    {
+      fiscal_year: budgetYear || data?.budget_year || undefined,
+      bi_code: officeCode || data?.office_code || undefined,
+      payment_type_id: data?.payment_type_id ?? undefined,
+    },
+    Boolean(
+      data?.status === "budget_expert_processing" &&
+      (budgetYear || data?.budget_year) &&
+      (officeCode || data?.office_code),
+    ),
+  );
+
   const storedRoles = authService.getStoredRoles();
 
   const role =
@@ -396,8 +445,11 @@ export default function PaymentDetailPage() {
   const isBudgetTlForwardStep =
     role === "planning-budget-team-leader" && status === "budget_tl_review";
 
-  const isRecordsStep = role === "records-office" && status === "records_processing";
-  const isFinanceStep = (role === "finance-accountant" || role === "finance") && status === "sent_to_finance";
+  const isRecordsStep =
+    role === "records-office" && status === "records_processing";
+  const isFinanceStep =
+    (role === "finance-accountant" || role === "finance") &&
+    status === "sent_to_finance";
 
   useEffect(() => {
     if (!data) return;
@@ -407,7 +459,9 @@ export default function PaymentDetailPage() {
     setReferenceNo(data.reference_no ?? "");
     setOfficialDate(formatDate(data.official_date));
     setPaidAmount(String(data.paid_amount ?? data.amount ?? ""));
-    setPaidDate(formatDate(data.paid_date) || new Date().toISOString().slice(0, 10));
+    setPaidDate(
+      formatDate(data.paid_date) || new Date().toISOString().slice(0, 10),
+    );
     setVoucherNo(data.voucher_no ?? "");
     setFinanceRemark(data.finance_remark ?? "");
 
@@ -417,7 +471,8 @@ export default function PaymentDetailPage() {
 
     setEditableItems(
       sourceItems.map((item: any) => ({
-        budget_code: item.budget_code ?? item.invoice_no ?? data.budget_code ?? "",
+        budget_code:
+          item.budget_code ?? item.invoice_no ?? data.budget_code ?? "",
         description: item.description ?? "",
         amount: Number(item.total_price ?? item.unit_price ?? item.amount ?? 0),
       })),
@@ -434,10 +489,54 @@ export default function PaymentDetailPage() {
     );
   }
 
+  function resetBudgetRows() {
+    setEditableItems((current) =>
+      (current.length
+        ? current
+        : [{ budget_code: "", description: "", amount: 0 }]
+      ).map((item) => ({
+        ...item,
+        budget_id: undefined,
+        budget_code: "",
+        selected_budget: null,
+      })),
+    );
+  }
+
+  function handleBudgetYearChange(value: string) {
+    setBudgetYear(value);
+    setOfficeCode("");
+    resetBudgetRows();
+  }
+
+  function handleOfficeCodeChange(value: string) {
+    setOfficeCode(value);
+    resetBudgetRows();
+  }
+
+  function handleBudgetCodeChange(index: number, value: string) {
+    const selectedBudget = (budgetAccountCodesQuery.data ?? []).find(
+      (budget: any) => String(budget.budget_code) === String(value),
+    );
+
+    setEditableItems((current) =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+
+        return {
+          ...item,
+          budget_id: selectedBudget?.id,
+          budget_code: selectedBudget?.budget_code ?? value,
+          selected_budget: selectedBudget ?? null,
+        };
+      }),
+    );
+  }
+
   function addEditableItem() {
     setEditableItems((current) => [
       ...current,
-      { budget_code: "", description: "", amount: 0 },
+      { budget_code: "", description: "", amount: 0, selected_budget: null },
     ]);
   }
 
@@ -493,7 +592,10 @@ export default function PaymentDetailPage() {
   const recordsStamp = signerUrl(data.records_signer, "stamp");
   const finalManagerSigner = data.manager_final_signer ?? null;
   const finalBudgetTlSigner = data.budget_tl_final_signer ?? null;
-  const paymentTypeWatermark = relationName(data.payment_type, data.request_type || "");
+  const paymentTypeWatermark = relationName(
+    data.payment_type,
+    data.request_type || "",
+  );
 
   function printPaper(copy: "remaining" | "exit" = "remaining") {
     setShowApprovalHistory(false);
@@ -503,7 +605,10 @@ export default function PaymentDetailPage() {
       document.body.classList.add("per-diem-printing");
       setTimeout(() => {
         window.print();
-        setTimeout(() => document.body.classList.remove("per-diem-printing"), 200);
+        setTimeout(
+          () => document.body.classList.remove("per-diem-printing"),
+          200,
+        );
       }, 50);
       return;
     }
@@ -545,7 +650,9 @@ export default function PaymentDetailPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div>
-          <Badge className="mb-2 capitalize">{data.status.replaceAll("_", " ")}</Badge>
+          <Badge className="mb-2 capitalize">
+            {data.status.replaceAll("_", " ")}
+          </Badge>
           <h1 className="text-2xl font-bold">Payment Request Details</h1>
         </div>
 
@@ -577,187 +684,201 @@ export default function PaymentDetailPage() {
         isPerDiem ? (
           <PerDiemPrintableEmployees payment={data} />
         ) : (
-        <Card
-          id="payment-print-area"
-          className="relative mx-auto max-w-[980px] overflow-hidden rounded-none border bg-white shadow-sm print:shadow-none"
-        >
-          {paymentTypeWatermark ? (
-            <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden">
-              <span className="select-none rotate-[-35deg] text-[72px] font-normal tracking-wider text-slate-700/20 print:text-[62px]">
-                {paymentTypeWatermark}
-              </span>
-            </div>
-          ) : null}
-
-          <div className="pointer-events-none absolute left-8 top-8 z-10 rounded border border-dashed border-slate-400 px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-600 print:left-4 print:top-4 print:text-[10px]">
-            {printCopy === "exit" ? "EXIT COPY" : "REMAINING COPY"}
-          </div>
-
-          <CardContent className="relative z-10 p-10 font-serif text-[18px] leading-8 print:p-0 print:text-[13px] print:leading-5">
-            <div className="mb-5 flex justify-end text-[17px] font-bold print:text-[13px]">
-              <div className="space-y-2">
-                <div>
-                  Lakk{" "}
-                  <span className="inline-block min-w-40 border-b border-black px-2 font-normal">
-                    {data.reference_no || ""}
-                  </span>
-                </div>
-
-                <div>
-                  Guyyaa{" "}
-                  <span className="inline-block min-w-40 border-b border-black px-2 font-normal">
-                    {ethiopianDate(data.official_date)}
-                  </span>
-                </div>
+          <Card
+            id="payment-print-area"
+            className="relative mx-auto max-w-[980px] overflow-hidden rounded-none border bg-white shadow-sm print:shadow-none"
+          >
+            {paymentTypeWatermark ? (
+              <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden">
+                <span className="select-none rotate-[-35deg] text-[72px] font-normal tracking-wider text-slate-700/20 print:text-[62px]">
+                  {paymentTypeWatermark}
+                </span>
               </div>
+            ) : null}
+
+            <div className="pointer-events-none absolute left-8 top-8 z-10 rounded border border-dashed border-slate-400 px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-600 print:left-4 print:top-4 print:text-[10px]">
+              {printCopy === "exit" ? "EXIT COPY" : "REMAINING COPY"}
             </div>
 
-            <div className="pointer-events-none absolute left-14 top-8 z-20 print:left-10 print:top-6">
-              <TiterImage
-                signer={data.records_signer}
-                className="h-32 max-w-[260px] -rotate-[12deg] object-contain opacity-95 print:h-28 print:max-w-[230px]"
-              />
-            </div>
-
-            <div className="mb-16 print:mb-14" />
-
-            <div className="mb-3 space-y-1 text-center font-bold">
-              <p>
-                <span className="bg-blue-100/80 px-1">
-                  Biiroo Maallaqaa Oromiyaatti
-                </span>
-              </p>
-              <p>Waajjira Maallaqaa&nbsp; Bul. Mag. Adaamaa</p>
-              <p>
-                Uunkaa&nbsp; Baasiin Hojii Adeemsiftuu Puulii Irratti Ittin
-                Gaafatamuu
-              </p>
-            </div>
-
-            <div className="mb-3">
-              <p>Adeemsa Hojii Bulchiinsa Faayinaansii tiif</p>
-              <p>
-                Baajataa Bara{" "}
-                <span className="inline-block min-w-24 border-b border-black px-2">
-                  {data.budget_year || ""}
-                </span>
-                Mana&nbsp; Hojii&nbsp; Keenyaaf Eyyamamee&nbsp; Irraa&nbsp; Kodii
-                Mana Hojii
-              </p>
-              <p>
-                <span className="inline-block min-w-32 border-b border-black px-2">
-                  {data.office_code || ""}
-                </span>
-                Gulantaa Herreegaa Kana Gaditti Ibsamee.
-              </p>
-            </div>
-
-            <div className="relative mb-1">
-              <table className="w-full border-collapse border border-black text-center text-[17px] print:text-[11px]">
-                <thead>
-                  <tr>
-                    <th className="w-[8%] border border-black px-2 py-1">Lakk</th>
-                    <th className="w-[24%] border border-black px-2 py-1">
-                      Gulantaa Herregaa
-                    </th>
-                    <th className="w-[24%] border border-black px-2 py-1">
-                      Hamma Qarshii
-                    </th>
-                    <th className="border border-black px-2 py-1">Ibsa</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {rows.map((item: any, index: number) => (
-                    <tr key={item.id ?? index}>
-                      <td className="h-20 border border-black px-2 py-1 align-top print:h-12">
-                        {index + 1}
-                      </td>
-                      <td className="border border-black px-2 py-1 align-top">
-                        {item.invoice_no || data.budget_code || ""}
-                      </td>
-                      <td className="border border-black px-2 py-1 align-top">
-                        {money(item.total_price ?? item.unit_price ?? item.amount ?? 0)}
-                      </td>
-                      <td className="border border-black px-2 py-1 align-top text-left">
-                        {item.description || ""}
-                      </td>
-                    </tr>
-                  ))}
-
-                  <tr>
-                    <td
-                      colSpan={2}
-                      className="border border-black px-2 py-1 text-left"
-                    >
-                      Ida’amaa Qarshii
-                    </td>
-                    <td className="border border-black px-2 py-1">{money(total)}</td>
-                    <td className="border border-black px-2 py-1" />
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="relative mb-5 text-[17px] print:text-[11px]">
-              <p>
-                Qar.{" "}
-                <span className="inline-block min-w-[80%] border-b border-black px-2">
-                  {money(total)} ({data.description || ""})
-                </span>
-              </p>
-
-              <p className="relative min-h-14 px-24 text-center">
-                Accawntii W/ra Mana Qopheesaa irra bahi ta’e kaffatii akka
-                rawwatamuu ni beeksifnaa.
-              </p>
-            </div>
-
-            <div className="relative mb-5 min-h-[150px] print:min-h-[118px]">
-              {printCopy === "remaining" ? (
-                <>
-                  <div className="absolute left-6 top-0 w-[210px] print:left-4 print:w-[175px]">
-                    <SignerImages signer={data.budget_expert_signer} align="start" />
+            <CardContent className="relative z-10 p-10 font-serif text-[18px] leading-8 print:p-0 print:text-[13px] print:leading-5">
+              <div className="mb-5 flex justify-end text-[17px] font-bold print:text-[13px]">
+                <div className="space-y-2">
+                  <div>
+                    Lakk{" "}
+                    <span className="inline-block min-w-40 border-b border-black px-2 font-normal">
+                      {data.reference_no || ""}
+                    </span>
                   </div>
 
-                  <div className="absolute left-1/2 top-8 w-[230px] -translate-x-1/2 print:top-5 print:w-[185px]">
-                    <SignerImages signer={finalBudgetTlSigner} align="center" />
+                  <div>
+                    Guyyaa{" "}
+                    <span className="inline-block min-w-40 border-b border-black px-2 font-normal">
+                      {ethiopianDate(data.official_date)}
+                    </span>
                   </div>
-                </>
-              ) : null}
-
-              <div className="absolute right-4 top-14 w-[240px] text-right font-bold print:right-2 print:top-10 print:w-[195px]">
-                <p>Nagaa Wajjiin</p>
-                <div className="mt-1 flex justify-end">
-                  <SignerImages signer={finalManagerSigner} align="end" />
                 </div>
               </div>
-            </div>
 
-            <div className="relative mb-7 text-[17px] print:text-[11px]">
-              {recordsStamp ? (
-                <img
-                  src={recordsStamp}
-                  alt="records office stamp"
-                  className="pointer-events-none absolute left-1/2 top-8 z-20 h-28 w-28 -translate-x-1/2 object-contain opacity-95 print:top-4 print:h-24 print:w-24"
+              <div className="pointer-events-none absolute left-14 top-8 z-20 print:left-10 print:top-6">
+                <TiterImage
+                  signer={data.records_signer}
+                  className="h-32 max-w-[260px] -rotate-[12deg] object-contain opacity-95 print:h-28 print:max-w-[230px]"
                 />
-              ) : null}
-              <p className="mb-4 underline">G.G</p>
-              <p>➢&nbsp;&nbsp; Waajjiraa Hojii Gaggeesaa tiif</p>
-              <p>➢&nbsp;&nbsp; Kuta Baajataa tiif</p>
-              <p className="ml-8 underline">Adamaa</p>
-            </div>
+              </div>
 
-            <div className="text-[17px] print:text-[11px]">
-              <p>
-                Hojii Bittaa fi Bulchiinsa Faayinaansi Itti Ogeessaa Herreegaatiin
-                kan Guutamuu.
-              </p>
-              <p>Leejaraa Bajataa/Baasii Irraa Hir’ifamee jira</p>
-            </div>
+              <div className="mb-16 print:mb-14" />
 
-          </CardContent>
-        </Card>
+              <div className="mb-3 space-y-1 text-center font-bold">
+                <p>
+                  <span className="bg-blue-100/80 px-1">
+                    Biiroo Maallaqaa Oromiyaatti
+                  </span>
+                </p>
+                <p>Waajjira Maallaqaa&nbsp; Bul. Mag. Adaamaa</p>
+                <p>
+                  Uunkaa&nbsp; Baasiin Hojii Adeemsiftuu Puulii Irratti Ittin
+                  Gaafatamuu
+                </p>
+              </div>
+
+              <div className="mb-3">
+                <p>Adeemsa Hojii Bulchiinsa Faayinaansii tiif</p>
+                <p>
+                  Baajataa Bara{" "}
+                  <span className="inline-block min-w-24 border-b border-black px-2">
+                    {data.budget_year || ""}
+                  </span>
+                  Mana&nbsp; Hojii&nbsp; Keenyaaf Eyyamamee&nbsp; Irraa&nbsp;
+                  Kodii Mana Hojii
+                </p>
+                <p>
+                  <span className="inline-block min-w-32 border-b border-black px-2">
+                    {data.office_code || ""}
+                  </span>
+                  Gulantaa Herreegaa Kana Gaditti Ibsamee.
+                </p>
+              </div>
+
+              <div className="relative mb-1">
+                <table className="w-full border-collapse border border-black text-center text-[17px] print:text-[11px]">
+                  <thead>
+                    <tr>
+                      <th className="w-[8%] border border-black px-2 py-1">
+                        Lakk
+                      </th>
+                      <th className="w-[24%] border border-black px-2 py-1">
+                        Gulantaa Herregaa
+                      </th>
+                      <th className="w-[24%] border border-black px-2 py-1">
+                        Hamma Qarshii
+                      </th>
+                      <th className="border border-black px-2 py-1">Ibsa</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {rows.map((item: any, index: number) => (
+                      <tr key={item.id ?? index}>
+                        <td className="h-20 border border-black px-2 py-1 align-top print:h-12">
+                          {index + 1}
+                        </td>
+                        <td className="border border-black px-2 py-1 align-top">
+                          {item.invoice_no || data.budget_code || ""}
+                        </td>
+                        <td className="border border-black px-2 py-1 align-top">
+                          {money(
+                            item.total_price ??
+                              item.unit_price ??
+                              item.amount ??
+                              0,
+                          )}
+                        </td>
+                        <td className="border border-black px-2 py-1 align-top text-left">
+                          {item.description || ""}
+                        </td>
+                      </tr>
+                    ))}
+
+                    <tr>
+                      <td
+                        colSpan={2}
+                        className="border border-black px-2 py-1 text-left"
+                      >
+                        Ida’amaa Qarshii
+                      </td>
+                      <td className="border border-black px-2 py-1">
+                        {money(total)}
+                      </td>
+                      <td className="border border-black px-2 py-1" />
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="relative mb-5 text-[17px] print:text-[11px]">
+                <p>
+                  Qar.{" "}
+                  <span className="inline-block min-w-[80%] border-b border-black px-2">
+                    {money(total)} ({data.description || ""})
+                  </span>
+                </p>
+
+                <p className="relative min-h-14 px-24 text-center">
+                  Accawntii W/ra Mana Qopheesaa irra bahi ta’e kaffatii akka
+                  rawwatamuu ni beeksifnaa.
+                </p>
+              </div>
+
+              <div className="relative mb-5 min-h-[150px] print:min-h-[118px]">
+                {printCopy === "remaining" ? (
+                  <>
+                    <div className="absolute left-6 top-0 w-[210px] print:left-4 print:w-[175px]">
+                      <SignerImages
+                        signer={data.budget_expert_signer}
+                        align="start"
+                      />
+                    </div>
+
+                    <div className="absolute left-1/2 top-8 w-[230px] -translate-x-1/2 print:top-5 print:w-[185px]">
+                      <SignerImages
+                        signer={finalBudgetTlSigner}
+                        align="center"
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                <div className="absolute right-4 top-14 w-[240px] text-right font-bold print:right-2 print:top-10 print:w-[195px]">
+                  <p>Nagaa Wajjiin</p>
+                  <div className="mt-1 flex justify-end">
+                    <SignerImages signer={finalManagerSigner} align="end" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative mb-7 text-[17px] print:text-[11px]">
+                {recordsStamp ? (
+                  <img
+                    src={recordsStamp}
+                    alt="records office stamp"
+                    className="pointer-events-none absolute left-1/2 top-8 z-20 h-28 w-28 -translate-x-1/2 object-contain opacity-95 print:top-4 print:h-24 print:w-24"
+                  />
+                ) : null}
+                <p className="mb-4 underline">G.G</p>
+                <p>➢&nbsp;&nbsp; Waajjiraa Hojii Gaggeesaa tiif</p>
+                <p>➢&nbsp;&nbsp; Kuta Baajataa tiif</p>
+                <p className="ml-8 underline">Adamaa</p>
+              </div>
+
+              <div className="text-[17px] print:text-[11px]">
+                <p>
+                  Hojii Bittaa fi Bulchiinsa Faayinaansi Itti Ogeessaa
+                  Herreegaatiin kan Guutamuu.
+                </p>
+                <p>Leejaraa Bajataa/Baasii Irraa Hir’ifamee jira</p>
+              </div>
+            </CardContent>
+          </Card>
         )
       ) : (
         <Card className="rounded-2xl border bg-card shadow-sm print:hidden">
@@ -784,7 +905,9 @@ export default function PaymentDetailPage() {
                   </div>
 
                   <div>
-                    <p className="font-medium">{history.actor?.name ?? "System"}</p>
+                    <p className="font-medium">
+                      {history.actor?.name ?? "System"}
+                    </p>
                     <p className="text-muted-foreground">
                       {history.note ?? "No approval description"}
                     </p>
@@ -826,8 +949,9 @@ export default function PaymentDetailPage() {
         </Card>
       )}
 
-      {isBudgetExpertStep && isPerDiem ? <PerDiemExpertWorkspace payment={data} /> : null}
-
+      {isBudgetExpertStep && isPerDiem ? (
+        <PerDiemExpertWorkspace payment={data} />
+      ) : null}
 
       {isBudgetExpertStep && !isPerDiem ? (
         <Card className="rounded-2xl border bg-card shadow-sm print:hidden">
@@ -839,25 +963,113 @@ export default function PaymentDetailPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="text-sm font-medium">
-                  Kodii Mana Hojii / Office Code
+                  Baajataa Bara / Budget Year (E.C)
                 </label>
-                <Input
-                  value={officeCode}
-                  onChange={(event) => setOfficeCode(event.target.value)}
-                  placeholder="Enter office code"
-                />
+                <select
+                  className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={budgetYear}
+                  onChange={(event) =>
+                    handleBudgetYearChange(event.target.value)
+                  }
+                >
+                  <option value="">Select budget year</option>
+                  {(budgetFiscalYearsQuery.data ?? []).map((year: string) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                  {budgetYear &&
+                  !(budgetFiscalYearsQuery.data ?? []).includes(budgetYear) ? (
+                    <option value={budgetYear}>{budgetYear}</option>
+                  ) : null}
+                </select>
               </div>
 
               <div>
                 <label className="text-sm font-medium">
-                  Baajataa Bara / Budget Year (E.C)
+                  Kodii Mana Hojii / Office Code (BI Code)
                 </label>
-                <Input
-                  value={budgetYear}
-                  onChange={(event) => setBudgetYear(event.target.value)}
-                  placeholder="2017"
-                />
+                <select
+                  className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  value={officeCode}
+                  disabled={!budgetYear || budgetBiCodesQuery.isLoading}
+                  onChange={(event) =>
+                    handleOfficeCodeChange(event.target.value)
+                  }
+                >
+                  <option value="">
+                    {budgetBiCodesQuery.isLoading
+                      ? "Loading BI Codes..."
+                      : "Select BI Code"}
+                  </option>
+                  {(budgetBiCodesQuery.data ?? []).map((code: string) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                  {officeCode &&
+                  !(budgetBiCodesQuery.data ?? []).includes(officeCode) ? (
+                    <option value={officeCode}>{officeCode}</option>
+                  ) : null}
+                </select>
               </div>
+            </div>
+
+            <div className="rounded-xl border bg-emerald-50/60 p-4 text-sm">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-emerald-950">
+                    Budget Recommendation
+                  </p>
+                  <p className="text-emerald-900">
+                    Select fiscal year, BI Code, and Account Code. Balance Not Committed is shown here for guidance only. Amount and description must be filled by the Planning & Budget Expert.
+                  </p>
+                </div>
+                <Badge variant="outline">
+                  {officeCode || "No BI Code selected"}
+                </Badge>
+              </div>
+
+              {editableItems.some((item) => item.selected_budget) ? (
+                <div className="overflow-x-auto rounded-lg border bg-white">
+                  <table className="w-full min-w-[720px] text-sm">
+                    <thead className="bg-muted/60 text-left">
+                      <tr>
+                        <th className="px-3 py-2">Fiscal Year</th>
+                        <th className="px-3 py-2">BI Code / Office Code</th>
+                        <th className="px-3 py-2">Account Code</th>
+                        <th className="px-3 py-2">Account Description</th>
+                        <th className="px-3 py-2 text-right">Adjusted Budget</th>
+                        <th className="px-3 py-2 text-right">Debit</th>
+                        <th className="px-3 py-2 text-right">Balance Not Committed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editableItems
+                        .filter((item) => item.selected_budget)
+                        .map((item, recommendationIndex) => {
+                          const budget = item.selected_budget;
+
+                          return (
+                            <tr key={`${budget.id ?? budget.budget_code}-${recommendationIndex}`} className="border-t">
+                              <td className="px-3 py-2">{budget.fiscal_year ?? budgetYear ?? "-"}</td>
+                              <td className="px-3 py-2 font-medium">{budget.bi_code ?? officeCode ?? "-"}</td>
+                              <td className="px-3 py-2">{budget.budget_code ?? item.budget_code ?? "-"}</td>
+                              <td className="px-3 py-2">{budget.account_name ?? budget.description ?? "-"}</td>
+                              <td className="px-3 py-2 text-right">{money(budget.allocated_amount)}</td>
+                              <td className="px-3 py-2 text-right">{money(budget.used_amount)}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-emerald-700">{money(budget.remaining_amount)}</td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-emerald-900">
+                  No Account Code selected yet. Balance Not Committed will appear here after selecting a Budget Code.
+                </p>
+              )}
             </div>
 
             {editableItems.map((item, index) => (
@@ -865,13 +1077,32 @@ export default function PaymentDetailPage() {
                 key={index}
                 className="grid gap-3 rounded-xl border bg-card p-4 md:grid-cols-[1fr_1fr_1.4fr_auto]"
               >
-                <Input
-                  placeholder="Gulantaa Herregaa / Budget Code"
+                <select
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={item.budget_code}
-                  onChange={(event) =>
-                    updateEditableItem(index, "budget_code", event.target.value)
+                  disabled={
+                    !budgetYear ||
+                    !officeCode ||
+                    budgetAccountCodesQuery.isLoading
                   }
-                />
+                  onChange={(event) =>
+                    handleBudgetCodeChange(index, event.target.value)
+                  }
+                >
+                  <option value="">
+                    {budgetAccountCodesQuery.isLoading
+                      ? "Loading Account Codes..."
+                      : "Gulantaa Herregaa / Budget Code"}
+                  </option>
+                  {(budgetAccountCodesQuery.data ?? []).map((budget: any) => (
+                    <option
+                      key={`${budget.id}-${budget.budget_code}`}
+                      value={budget.budget_code}
+                    >
+                      {budget.budget_code}
+                    </option>
+                  ))}
+                </select>
 
                 <Input
                   type="number"
@@ -931,7 +1162,9 @@ export default function PaymentDetailPage() {
                     required
                     className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                     value={submitReceiverId}
-                    onChange={(event) => setSubmitReceiverId(event.target.value)}
+                    onChange={(event) =>
+                      setSubmitReceiverId(event.target.value)
+                    }
                     disabled={approversQuery.isLoading}
                   >
                     <option value="">
@@ -942,7 +1175,8 @@ export default function PaymentDetailPage() {
 
                     {(approversQuery.data ?? []).map((user: any) => (
                       <option key={user.id} value={user.id}>
-                        {user.name} — {user.display_role ?? user.role ?? "Approver"}
+                        {user.name} —{" "}
+                        {user.display_role ?? user.role ?? "Approver"}
                       </option>
                     ))}
                   </select>
@@ -954,13 +1188,19 @@ export default function PaymentDetailPage() {
                   <div className="rounded-xl border bg-blue-50/60 p-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold">Budget Availability Before Expert Assignment</p>
+                        <p className="text-sm font-semibold">
+                          Budget Availability Before Expert Assignment
+                        </p>
                         <p className="text-xs text-muted-foreground">
-                          Balance Not Committed by BI Code for the selected payment type/account code.
+                          Balance Not Committed by BI Code for the selected
+                          payment type/account code.
                         </p>
                       </div>
                       <Badge variant="outline">
-                        {relationName(data.payment_type, data.request_type || "Payment Type")}
+                        {relationName(
+                          data.payment_type,
+                          data.request_type || "Payment Type",
+                        )}
                       </Badge>
                     </div>
 
@@ -975,38 +1215,79 @@ export default function PaymentDetailPage() {
                           <thead className="bg-muted/60 text-left">
                             <tr>
                               <th className="px-3 py-2">Fiscal Year</th>
-                              <th className="px-3 py-2">BI Code / Office Code</th>
+                              <th className="px-3 py-2">
+                                BI Code / Office Code
+                              </th>
                               <th className="px-3 py-2">Account Code</th>
                               <th className="px-3 py-2">Account Name</th>
-                              <th className="px-3 py-2 text-right">Adjusted Budget</th>
+                              <th className="px-3 py-2 text-right">
+                                Adjusted Budget
+                              </th>
                               <th className="px-3 py-2 text-right">Debit</th>
-                              <th className="px-3 py-2 text-right">Balance Not Committed</th>
+                              <th className="px-3 py-2 text-right">
+                                Balance Not Committed
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
-                            {(budgetAvailabilityQuery.data?.data ?? []).map((budget: any) => (
-                              <tr key={budget.id ?? `${budget.bi_code}-${budget.budget_code}`} className="border-t">
-                                <td className="px-3 py-2">{budget.fiscal_year ?? data.budget_year ?? "-"}</td>
-                                <td className="px-3 py-2 font-medium">{budget.bi_code ?? "-"}</td>
-                                <td className="px-3 py-2">{budget.budget_code ?? "-"}</td>
-                                <td className="px-3 py-2">{budget.account_name ?? "-"}</td>
-                                <td className="px-3 py-2 text-right">{money(budget.allocated_amount)}</td>
-                                <td className="px-3 py-2 text-right">{money(budget.used_amount)}</td>
-                                <td className="px-3 py-2 text-right font-semibold">{money(budget.remaining_amount)}</td>
-                              </tr>
-                            ))}
+                            {(budgetAvailabilityQuery.data?.data ?? []).map(
+                              (budget: any) => (
+                                <tr
+                                  key={
+                                    budget.id ??
+                                    `${budget.bi_code}-${budget.budget_code}`
+                                  }
+                                  className="border-t"
+                                >
+                                  <td className="px-3 py-2">
+                                    {budget.fiscal_year ??
+                                      data.budget_year ??
+                                      "-"}
+                                  </td>
+                                  <td className="px-3 py-2 font-medium">
+                                    {budget.bi_code ?? "-"}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {budget.budget_code ?? "-"}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {budget.account_name ?? "-"}
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    {money(budget.allocated_amount)}
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    {money(budget.used_amount)}
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-semibold">
+                                    {money(budget.remaining_amount)}
+                                  </td>
+                                </tr>
+                              ),
+                            )}
                           </tbody>
                           <tfoot className="border-t bg-muted/40 font-semibold">
                             <tr>
-                              <td className="px-3 py-2" colSpan={4}>Total</td>
-                              <td className="px-3 py-2 text-right">
-                                {money(budgetAvailabilityQuery.data?.meta?.total_adjusted_budget)}
+                              <td className="px-3 py-2" colSpan={4}>
+                                Total
                               </td>
                               <td className="px-3 py-2 text-right">
-                                {money(budgetAvailabilityQuery.data?.meta?.total_debit)}
+                                {money(
+                                  budgetAvailabilityQuery.data?.meta
+                                    ?.total_adjusted_budget,
+                                )}
                               </td>
                               <td className="px-3 py-2 text-right">
-                                {money(budgetAvailabilityQuery.data?.meta?.total_balance_not_committed)}
+                                {money(
+                                  budgetAvailabilityQuery.data?.meta
+                                    ?.total_debit,
+                                )}
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                {money(
+                                  budgetAvailabilityQuery.data?.meta
+                                    ?.total_balance_not_committed,
+                                )}
                               </td>
                             </tr>
                           </tfoot>
@@ -1014,7 +1295,8 @@ export default function PaymentDetailPage() {
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        No active budget balance found for this payment type/account code.
+                        No active budget balance found for this payment
+                        type/account code.
                       </p>
                     )}
                   </div>
@@ -1023,36 +1305,41 @@ export default function PaymentDetailPage() {
                     <label className="text-sm font-medium">
                       Planning & Budget Expert
                     </label>
-                  <select
-                    required
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={selectedExpertId}
-                    onChange={(event) => setSelectedExpertId(event.target.value)}
-                    disabled={planningBudgetExpertsQuery.isLoading}
-                  >
-                    <option value="">
-                      {planningBudgetExpertsQuery.isLoading
-                        ? "Loading Planning & Budget Experts..."
-                        : "Select Planning & Budget Expert"}
-                    </option>
-
-                    {(planningBudgetExpertsQuery.data ?? []).map((expert: any) => (
-                      <option key={expert.id} value={expert.id}>
-                        {expert.name} —{" "}
-                        {expert.display_role ??
-                          expert.role ??
-                          "Planning & Budget Expert"}
+                    <select
+                      required
+                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                      value={selectedExpertId}
+                      onChange={(event) =>
+                        setSelectedExpertId(event.target.value)
+                      }
+                      disabled={planningBudgetExpertsQuery.isLoading}
+                    >
+                      <option value="">
+                        {planningBudgetExpertsQuery.isLoading
+                          ? "Loading Planning & Budget Experts..."
+                          : "Select Planning & Budget Expert"}
                       </option>
-                    ))}
-                  </select>
 
-                  {!planningBudgetExpertsQuery.isLoading &&
-                  (planningBudgetExpertsQuery.data ?? []).length === 0 ? (
-                    <p className="text-xs text-destructive">
-                      No active Planning & Budget Expert found. Assign the
-                      planning-budget-experts role to at least one active user.
-                    </p>
-                  ) : null}
+                      {(planningBudgetExpertsQuery.data ?? []).map(
+                        (expert: any) => (
+                          <option key={expert.id} value={expert.id}>
+                            {expert.name} —{" "}
+                            {expert.display_role ??
+                              expert.role ??
+                              "Planning & Budget Expert"}
+                          </option>
+                        ),
+                      )}
+                    </select>
+
+                    {!planningBudgetExpertsQuery.isLoading &&
+                    (planningBudgetExpertsQuery.data ?? []).length === 0 ? (
+                      <p className="text-xs text-destructive">
+                        No active Planning & Budget Expert found. Assign the
+                        planning-budget-experts role to at least one active
+                        user.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -1085,16 +1372,29 @@ export default function PaymentDetailPage() {
                 <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
                   <div className="grid gap-3 md:grid-cols-3">
                     <div>
-                      <p className="text-xs text-muted-foreground">Approved Amount</p>
-                      <p className="text-lg font-semibold">{money(data.amount)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Approved Amount
+                      </p>
+                      <p className="text-lg font-semibold">
+                        {money(data.amount)}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Balance Not Committed</p>
-                      <p className="text-lg font-semibold">{money(data.budget?.remaining_amount)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Balance Not Committed
+                      </p>
+                      <p className="text-lg font-semibold">
+                        {money(data.budget?.remaining_amount)}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">BI / Account Code</p>
-                      <p className="text-sm font-medium">{data.office_code || data.budget?.bi_code || "-"} / {data.budget_code || data.budget?.budget_code || "-"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        BI / Account Code
+                      </p>
+                      <p className="text-sm font-medium">
+                        {data.office_code || data.budget?.bi_code || "-"} /{" "}
+                        {data.budget_code || data.budget?.budget_code || "-"}
+                      </p>
                     </div>
                   </div>
 
@@ -1128,7 +1428,9 @@ export default function PaymentDetailPage() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium">Finance Remark</label>
+                    <label className="text-sm font-medium">
+                      Finance Remark
+                    </label>
                     <Textarea
                       value={financeRemark}
                       onChange={(event) => setFinanceRemark(event.target.value)}
@@ -1156,8 +1458,10 @@ export default function PaymentDetailPage() {
                       disabled={
                         actionMutation.isPending ||
                         (item.action === "submit" && !submitReceiverId) ||
-                        (item.action === "budget_tl_approve" && !selectedExpertId) ||
-                        (item.action === "finance_complete" && (!paidAmount || !paidDate))
+                        (item.action === "budget_tl_approve" &&
+                          !selectedExpertId) ||
+                        (item.action === "finance_complete" &&
+                          (!paidAmount || !paidDate))
                       }
                       onClick={() =>
                         actionMutation.mutate({
@@ -1174,9 +1478,14 @@ export default function PaymentDetailPage() {
                             ...(item.action === "expert_complete"
                               ? {
                                   office_code: officeCode,
-                                  budget_code: editableItems[0]?.budget_code ?? "",
+                                  budget_code:
+                                    editableItems[0]?.budget_code ?? "",
+                                  budget_id: editableItems[0]?.budget_id,
                                   budget_year: budgetYear,
-                                  items: editableItems,
+                                  items: editableItems.map((editableItem) => ({
+                                    ...editableItem,
+                                    total_price: editableItem.amount,
+                                  })),
                                 }
                               : {}),
                             ...(item.action === "records_process"

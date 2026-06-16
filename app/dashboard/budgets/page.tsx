@@ -21,6 +21,7 @@ import {
   useDeleteBudget,
   useUpdateBudget,
 } from "@/hooks/budget/use-budget";
+import { usePaymentTypes } from "@/hooks/payment/use-payment-master-data";
 import type { Budget, BudgetPayload } from "@/types/budget/budget.type";
 
 const LOW_BUDGET_THRESHOLD = 5000;
@@ -94,6 +95,12 @@ export default function BudgetsPage() {
   const role = authService.getStoredRoles()[0] ?? storedUser?.role ?? "";
   const normalizedRole = normalizeRole(role);
   const canManageBudget = BUDGET_MANAGER_ROLES.has(normalizedRole);
+
+  const paymentTypesQuery = usePaymentTypes({ per_page: 1000 });
+  const paymentTypes = paymentTypesQuery.data?.data ?? [];
+  const currentAccountDescriptionMissing =
+    Boolean(form.account_name) &&
+    !paymentTypes.some((type) => type.name === form.account_name);
 
   const budgetsQuery = useBudgets({
     search,
@@ -199,6 +206,11 @@ export default function BudgetsPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault();
+
+    if (!form.account_name) {
+      toast.error("Please select Account Description from Payment Type.");
+      return;
+    }
 
     if (!canManageBudget) {
       toast.error("You have view-only access to Budget Management.");
@@ -406,7 +418,31 @@ export default function BudgetsPage() {
             </div>
             <div>
               <Label>Account Description</Label>
-              <Input required value={form.account_name} onChange={(event) => setForm((current) => ({ ...current, account_name: event.target.value }))} placeholder="Salaries to permanent staff" />
+              <Select
+                value={form.account_name || undefined}
+                onValueChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    account_name: value,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={paymentTypesQuery.isLoading ? "Loading payment types..." : "Select payment type"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {currentAccountDescriptionMissing ? (
+                    <SelectItem value={form.account_name}>
+                      {form.account_name}
+                    </SelectItem>
+                  ) : null}
+                  {paymentTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.name}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Adjusted Budget</Label>
