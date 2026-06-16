@@ -1,0 +1,2 @@
+export type AuditLog = { id: number; action: string; module?: string | null; entity_type?: string | null; entity_id?: number | null; message?: string | null; role_name?: string | null; ip_address?: string | null; created_at: string; user?: { id: number; name: string; email?: string } | null };
+export type AuditLogResponse = { data: AuditLog[]; current_page: number; per_page: number; total: number; last_page: number };
