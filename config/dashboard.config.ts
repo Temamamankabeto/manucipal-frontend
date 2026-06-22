@@ -25,6 +25,11 @@ export type AppRoleKey =
   | "manager"
   | "head-of-development-branch"
   | "head-of-service-branch"
+  | "team-leader"
+  | "expert"
+  | "secretory"
+  | "record-officer"
+  | "accountant"
   | "procurement-requester"
   | "payment-requester"
   | "planning-budget-team-leader"
@@ -45,24 +50,29 @@ export type DashboardDefinition = {
 };
 
 export const roleHome: Record<AppRoleKey, string> = {
-  "super-admin": "/dashboard/super-admin",
-  "admin-city": "/dashboard/admin-city",
-  "admin-subcity": "/dashboard/admin-subcity",
-  "admin-woreda": "/dashboard/admin-woreda",
-  "admin-zone": "/dashboard/admin-zone",
-  "asset-manager": "/dashboard/assets",
-  "manager": "/dashboard/manager",
-  "head-of-development-branch": "/dashboard/head-of-development-branch",
-  "head-of-service-branch": "/dashboard/head-of-service-branch",
-  "procurement-requester": "/dashboard/procurement",
-  "payment-requester": "/dashboard/payment",
-  "planning-budget-team-leader": "/dashboard/planning-budget-team-leader",
-  "planning-budget-experts": "/dashboard/planning-budget-experts",
-  "records-office": "/dashboard/record-office",
-  "finance": "/dashboard/payment",
-  "finance-accountant": "/dashboard/finance-accountant",
-  "asset-team-leader": "/dashboard/asset-team-leader",
-  "machinery-team-leader": "/dashboard/machinery-team-leader",
+  "super-admin": "/dashboard",
+  "admin-city": "/dashboard",
+  "admin-subcity": "/dashboard",
+  "admin-woreda": "/dashboard",
+  "admin-zone": "/dashboard",
+  "asset-manager": "/dashboard",
+  "manager": "/dashboard",
+  "head-of-development-branch": "/dashboard",
+  "head-of-service-branch": "/dashboard",
+  "team-leader": "/dashboard",
+  "expert": "/dashboard",
+  "secretory": "/dashboard",
+  "record-officer": "/dashboard",
+  "accountant": "/dashboard",
+  "procurement-requester": "/dashboard",
+  "payment-requester": "/dashboard",
+  "planning-budget-team-leader": "/dashboard",
+  "planning-budget-experts": "/dashboard",
+  "records-office": "/dashboard",
+  "finance": "/dashboard",
+  "finance-accountant": "/dashboard",
+  "asset-team-leader": "/dashboard",
+  "machinery-team-leader": "/dashboard",
 };
 
 export const dashboardConfig: Record<AppRoleKey, DashboardDefinition> = {
@@ -137,6 +147,47 @@ export const dashboardConfig: Record<AppRoleKey, DashboardDefinition> = {
     subtitle: "Payment and procurement approval workspace.",
     route: roleHome["head-of-service-branch"],
     icon: BriefcaseBusiness,
+  },
+
+  "team-leader": {
+    key: "team-leader",
+    roleName: "Team Leader",
+    title: "Team Leader Dashboard",
+    subtitle: "Department payment and procurement workflow workspace.",
+    route: roleHome["team-leader"],
+    icon: Receipt,
+  },
+  expert: {
+    key: "expert",
+    roleName: "Expert",
+    title: "Expert Dashboard",
+    subtitle: "Assigned payment and procurement processing workspace.",
+    route: roleHome.expert,
+    icon: Receipt,
+  },
+  secretory: {
+    key: "secretory",
+    roleName: "Secretory",
+    title: "Secretory Dashboard",
+    subtitle: "Record handling and dispatch workspace.",
+    route: roleHome.secretory,
+    icon: Receipt,
+  },
+  "record-officer": {
+    key: "record-officer",
+    roleName: "Record Officer",
+    title: "Record Officer Dashboard",
+    subtitle: "Registration, stamping, and record workflow workspace.",
+    route: roleHome["record-officer"],
+    icon: Receipt,
+  },
+  accountant: {
+    key: "accountant",
+    roleName: "Accountant",
+    title: "Accountant Dashboard",
+    subtitle: "Payment settlement and finance workspace.",
+    route: roleHome.accountant,
+    icon: Landmark,
   },
   "procurement-requester": {
     key: "procurement-requester",
@@ -221,6 +272,8 @@ export function normalizeRoleKey(role?: string | null): AppRoleKey {
     .replace(/-+/g, "-");
 
   const aliases: Record<string, AppRoleKey> = {
+    "super-admin": "super-admin",
+    superadmin: "super-admin",
     "planning-and-budget-expert": "planning-budget-experts",
     "planning-and-budget-experts": "planning-budget-experts",
     "planning-budget-expert": "planning-budget-experts",
@@ -233,6 +286,12 @@ export function normalizeRoleKey(role?: string | null): AppRoleKey {
     "budget-team-leader": "planning-budget-team-leader",
     "records-office": "records-office",
     "record-office": "records-office",
+    "record-officer": "record-officer",
+    "team-leader": "team-leader",
+    "department-head": "team-leader",
+    expert: "expert",
+    secretory: "secretory",
+    secretary: "secretory",
     manager: "manager",
     "head-of-development-branch": "head-of-development-branch",
     "head-development-branch": "head-of-development-branch",
@@ -245,7 +304,7 @@ export function normalizeRoleKey(role?: string | null): AppRoleKey {
     "machinery-team-leader": "machinery-team-leader",
     "machine-team-leader": "machinery-team-leader",
     "finance-accountant": "finance-accountant",
-    accountant: "finance-accountant",
+    accountant: "accountant",
     "finance-officer": "finance-accountant",
     finance: "finance-accountant",
   };

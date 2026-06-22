@@ -39,6 +39,7 @@ export default function PaymentTypesPage() {
 
   const categories = categoriesQuery.data?.data ?? [];
   const rows = typesQuery.data?.data ?? [];
+  const errorMessage = typesQuery.error instanceof Error ? typesQuery.error.message : null;
 
   function resetForm() {
     setEditing(null);
@@ -156,7 +157,9 @@ export default function PaymentTypesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {typesQuery.isLoading ? (
+                {errorMessage ? (
+                  <TableRow><TableCell colSpan={3} className="py-8 text-center text-destructive">{errorMessage}</TableCell></TableRow>
+                ) : typesQuery.isLoading ? (
                   <TableRow><TableCell colSpan={3} className="py-8 text-center text-muted-foreground">Loading...</TableCell></TableRow>
                 ) : rows.length > 0 ? rows.map((type) => (
                   <TableRow key={type.id}>

@@ -11,11 +11,13 @@ export type AuthUser = {
   permissions?: string[];
   admin_level?: "city" | "subcity" | "woreda" | "zone" | string | null;
   office_id?: number | null;
+  department_id?: number | null;
   sub_city_id?: number | null;
   subcity_id?: number | null;
   woreda_id?: number | null;
   zone_id?: number | null;
   office?: { id: number; name: string; type: string; parent_id?: number | null } | null;
+  department?: { id: number; name: string; office_id?: number | null } | null;
 };
 
 type LoginResponse = { token?: string; access_token?: string; refresh_token?: string; user?: AuthUser; roles?: string[]; permissions?: string[]; data?: LoginResponse };

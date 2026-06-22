@@ -32,6 +32,7 @@ export default function PaymentCategoriesPage() {
   const updateMutation = useUpdatePaymentCategory();
   const deleteMutation = useDeletePaymentCategory();
   const rows = query.data?.data ?? [];
+  const errorMessage = query.error instanceof Error ? query.error.message : null;
 
   function resetForm() {
     setEditing(null);
@@ -126,7 +127,9 @@ export default function PaymentCategoriesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {query.isLoading ? (
+                {errorMessage ? (
+                  <TableRow><TableCell colSpan={3} className="py-8 text-center text-destructive">{errorMessage}</TableCell></TableRow>
+                ) : query.isLoading ? (
                   <TableRow><TableCell colSpan={3} className="py-8 text-center text-muted-foreground">Loading...</TableCell></TableRow>
                 ) : rows.length > 0 ? rows.map((category) => (
                   <TableRow key={category.id}>

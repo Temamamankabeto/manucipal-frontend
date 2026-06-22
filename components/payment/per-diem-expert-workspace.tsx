@@ -196,13 +196,15 @@ function SignatureImage({
 }) {
   const src = signerUrl(signer, type);
   if (!src) return null;
-  return (
-    <img
-      src={src}
-      alt={type}
-      className="mx-auto h-8 max-w-28 object-contain print:h-6"
-    />
-  );
+
+  const className =
+    type === "titer"
+      ? "mx-auto h-14 max-w-52 -rotate-[14deg] object-contain opacity-95 print:h-11 print:max-w-44"
+      : type === "stamp"
+        ? "mx-auto h-28 w-28 object-contain opacity-95 print:h-24 print:w-24"
+        : "mx-auto h-8 max-w-28 object-contain print:h-6";
+
+  return <img src={src} alt={type} className={className} />;
 }
 
 function SignatureLine({ label, signer }: { label: string; signer?: any }) {
@@ -235,7 +237,9 @@ function isRecordsOfficeUser() {
 
   return [...roles, userRole]
     .map((role) => normaliseRole(role))
-    .some((role) => role === "records-office" || role === "record-office");
+    .some((role) =>
+      ["records-office", "record-office", "record-officer"].includes(role),
+    );
 }
 
 function printedStorageKey(paymentId: string | number, employeeId: string) {
@@ -259,17 +263,25 @@ function RecordOfficePageHeader({
   referenceNo,
   officialDate,
   showReference = false,
+  showTiter = true,
 }: {
   signer?: any;
   referenceNo?: string;
   officialDate?: string;
   showReference?: boolean;
+  showTiter?: boolean;
 }) {
+  const titer = signerUrl(signer, "titer");
+
   return (
-    <div className="relative mb-3 min-h-16 print:mb-2">
-      <div className="flex justify-center">
-        <SignatureImage signer={signer} type="titer" />
-      </div>
+    <div className="relative mb-3 min-h-24 print:mb-2 print:min-h-20">
+      {showTiter && titer ? (
+        <img
+          src={titer}
+          alt="records office titer"
+          className="pointer-events-none absolute left-6 top-1 z-20 h-28 max-w-[250px] -rotate-[14deg] object-contain opacity-95 print:left-3 print:top-0 print:h-24 print:max-w-[220px]"
+        />
+      ) : null}
 
       {showReference ? (
         <div className="absolute right-0 top-0 space-y-2 text-[15px] font-semibold print:text-[11px]">
@@ -300,7 +312,7 @@ function RecordOfficeStampOverlay({ signer }: { signer?: any }) {
     <img
       src={stamp}
       alt="records office stamp"
-      className="pointer-events-none absolute left-1/2 bottom-1 h-24 w-24 -translate-x-1/2 object-contain opacity-90 print:h-20 print:w-20"
+      className="pointer-events-none absolute left-1/2 bottom-1 h-28 w-28 -translate-x-1/2 object-contain opacity-95 print:h-24 print:w-24"
     />
   );
 }
@@ -455,7 +467,7 @@ function PerDiemExactEmployeeForm({
       </section>
 
       <section className="per-diem-a4-page relative mx-auto mt-6 min-h-[1120px] w-[794px] bg-white p-8 text-[14px] leading-6 print:mt-0 print:min-h-[277mm] print:w-[190mm] print:break-before-page print:p-0 print:text-[11px] print:leading-4">
-        <RecordOfficePageHeader signer={recordsSigner} />
+        <RecordOfficePageHeader signer={recordsSigner} showTiter={false} />
 
         <h2 className="text-center text-[18px] font-bold print:text-[14px]">
           Uunka 2:- Kaffaltii Durgoo Oolmaa Hojjattoota Mootummaa Itti Buufamu

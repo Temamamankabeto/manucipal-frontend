@@ -15,8 +15,14 @@ function clean(params: Record<string, unknown>) {
 }
 
 function toPaginated<T>(body: any): Paginated<T> {
-  const data = Array.isArray(body?.data) ? body.data : [];
-  const meta = body?.meta ?? {};
+  const paginator = body?.data;
+  const data = Array.isArray(paginator)
+    ? paginator
+    : Array.isArray(paginator?.data)
+      ? paginator.data
+      : [];
+
+  const meta = body?.meta ?? (Array.isArray(paginator) ? {} : paginator ?? {});
 
   return {
     success: body?.success ?? true,

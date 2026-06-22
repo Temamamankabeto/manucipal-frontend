@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { filterSidebarByPermissions, getSidebarForRole } from "@/config/sidebar.config";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,33 @@ function isRecordOfficeRole(role?: string | null) {
   return normalized === "record-office" || normalized === "records-office";
 }
 
+function getDepartmentName(user: any) {
+  return (
+    user?.department?.name ??
+    user?.department?.title ??
+    user?.department_name ??
+    user?.departmentName ??
+    user?.department ??
+    ""
+  );
+}
+
+function normalizeTranslationKey(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function translatedLabel(t: (key: string) => string, translationKey: string | undefined, fallback: string) {
+  const key = translationKey || normalizeTranslationKey(fallback);
+  const translated = t(key);
+
+  return translated === key ? fallback : translated;
+}
+
 function SidebarBadge({ count }: { count: number }) {
   if (count <= 0) return null;
 
@@ -42,15 +70,18 @@ function SidebarBadge({ count }: { count: number }) {
 
 export default function SidebarContent({ collapsed = false }: Props) {
   const pathname = usePathname();
+  const { t } = useTranslation();
   const user = authService.getStoredUser();
   const roles = authService.getStoredRoles();
   const role = roles[0] ?? user?.role ?? "Super Admin";
   const permissions = authService.getStoredPermissions();
   const recordOffice = isRecordOfficeRole(role);
 
+  const departmentName = getDepartmentName(user);
+
   const roleSidebar = useMemo(
-    () => getSidebarForRole(role, user?.admin_level),
-    [role, user?.admin_level],
+    () => getSidebarForRole(role, user?.admin_level, departmentName),
+    [role, user?.admin_level, departmentName],
   );
 
   const sections = filterSidebarByPermissions(roleSidebar, permissions, role);
@@ -137,7 +168,7 @@ export default function SidebarContent({ collapsed = false }: Props) {
                     <div key={item.label} className="space-y-1">
                       <button
                         type="button"
-                        title={collapsed ? item.label : undefined}
+                        title={collapsed ? translatedLabel(t, item.translationKey, item.label) : undefined}
                         onClick={() =>
                           setOpenMenus((current) => ({
                             ...current,
@@ -159,7 +190,7 @@ export default function SidebarContent({ collapsed = false }: Props) {
                         {!collapsed && (
                           <>
                             <span className="flex-1 text-left">
-                              {item.label}
+                              {translatedLabel(t, item.translationKey, item.label)}
                               <SidebarBadge count={itemBadgeCount} />
                             </span>
                             <ChevronRight
@@ -183,7 +214,7 @@ export default function SidebarContent({ collapsed = false }: Props) {
                                   pathname === child.href && "bg-sidebar-primary text-sidebar-primary-foreground",
                                 )}
                               >
-                                <span className="truncate">{child.label}</span>
+                                <span className="truncate">{translatedLabel(t, child.translationKey, child.label)}</span>
                                 <SidebarBadge count={childBadgeCount} />
                               </Link>
                             );
@@ -198,7 +229,7 @@ export default function SidebarContent({ collapsed = false }: Props) {
                   <Link
                     key={item.href ?? item.label}
                     href={item.href ?? "#"}
-                    title={collapsed ? item.label : undefined}
+                    title={collapsed ? translatedLabel(t, item.translationKey, item.label) : undefined}
                     className={cn(
                       "relative flex items-center rounded-xl text-sm font-medium transition hover:bg-sidebar-accent",
                       collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
@@ -213,7 +244,7 @@ export default function SidebarContent({ collapsed = false }: Props) {
                     ) : null}
                     {!collapsed && (
                       <span className="flex min-w-0 flex-1 items-center">
-                        <span className="truncate">{item.label}</span>
+                        <span className="truncate">{translatedLabel(t, item.translationKey, item.label)}</span>
                         <SidebarBadge count={itemBadgeCount} />
                       </span>
                     )}

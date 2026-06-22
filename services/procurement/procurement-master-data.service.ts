@@ -15,18 +15,26 @@ function clean(params: Record<string, unknown>) {
 }
 
 function toPaginated<T>(body: any): Paginated<T> {
-  const data = Array.isArray(body?.data) ? body.data : [];
-  const meta = body?.meta ?? {};
+  const payload = body?.success !== undefined ? body : body?.data ?? body;
+  const rawData = payload?.data;
+  const data = Array.isArray(rawData)
+    ? rawData
+    : Array.isArray(rawData?.data)
+      ? rawData.data
+      : Array.isArray(payload)
+        ? payload
+        : [];
+  const meta = payload?.meta ?? rawData?.meta ?? payload ?? {};
 
   return {
-    success: body?.success ?? true,
-    message: body?.message,
+    success: payload?.success ?? true,
+    message: payload?.message,
     data,
     meta: {
-      current_page: Number(meta.current_page ?? 1),
-      per_page: Number(meta.per_page ?? data.length ?? 15),
-      total: Number(meta.total ?? data.length ?? 0),
-      last_page: Number(meta.last_page ?? 1),
+      current_page: Number(meta.current_page ?? rawData?.current_page ?? 1),
+      per_page: Number(meta.per_page ?? rawData?.per_page ?? data.length ?? 15),
+      total: Number(meta.total ?? rawData?.total ?? data.length ?? 0),
+      last_page: Number(meta.last_page ?? rawData?.last_page ?? 1),
     },
   };
 }

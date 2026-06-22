@@ -133,6 +133,14 @@ export type PaymentRelation = {
   category_id?: number;
 };
 
+export type PaymentDepartment = {
+  id: number;
+  office_id?: number | null;
+  name: string;
+  is_active?: boolean;
+  office?: { id: number; name: string } | null;
+};
+
 export type PaymentRequest = {
   id: number;
   payment_no: string;
@@ -157,6 +165,12 @@ export type PaymentRequest = {
   official_date?: string | null;
   status: PaymentStatus;
   current_handler_id?: number | null;
+  department_id?: number | null;
+  assigned_team_leader_id?: number | null;
+  assigned_expert_id?: number | null;
+  department?: PaymentDepartment | null;
+  assigned_team_leader?: PaymentSigner | null;
+  assigned_expert?: PaymentSigner | null;
   submitted_at?: string | null;
   completed_at?: string | null;
   paid_amount?: number | string | null;
@@ -164,6 +178,17 @@ export type PaymentRequest = {
   paid_by?: number | null;
   voucher_no?: string | null;
   finance_remark?: string | null;
+  attachment_reference_no?: string | null;
+  attachment_official_date?: string | null;
+  attachment_to?: string | null;
+  attachment_address?: string | null;
+  attachment_case?: string | null;
+  attachment_body?: string | null;
+  attachment_gg?: string[] | null;
+  attachment_drafted_by?: number | null;
+  attachment_drafted_at?: string | null;
+  records_attachment_drafted_by?: number | null;
+  records_attachment_drafted_at?: string | null;
   requester?: { id: number; name: string; email?: string } | null;
   current_handler?: PaymentSigner | null;
   manager_signer?: PaymentSigner | null;
@@ -210,6 +235,8 @@ export type PaymentActionPayload = {
   reason?: string;
   send_to_user_id?: number | string | null;
   current_handler_id?: number | string | null;
+  department_id?: number | string | null;
+  team_leader_user_id?: number | string | null;
   expert_user_id?: number | string | null;
   budget_id?: number | string | null;
   budget_code?: string;
@@ -221,6 +248,13 @@ export type PaymentActionPayload = {
   paid_date?: string;
   voucher_no?: string;
   finance_remark?: string;
+  attachment_reference_no?: string;
+  attachment_official_date?: string;
+  attachment_to?: string;
+  attachment_address?: string;
+  attachment_case?: string;
+  attachment_body?: string;
+  attachment_gg?: string[];
   items?: PaymentItem[];
   per_diem?: { common?: Record<string, unknown>; employees?: Array<Record<string, unknown>> };
 };

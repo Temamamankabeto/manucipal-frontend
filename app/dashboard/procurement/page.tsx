@@ -24,23 +24,7 @@ function normalizeRole(role?: string | null) {
 }
 
 function canCreateProcurement() {
-  const role = normalizeRole(
-    authService.getStoredRoles()[0] || authService.getStoredUser()?.role
-  );
-
-  return [
-    "super-admin",
-    "manager",
-    "head-of-development-branch",
-    "head-development-branch",
-    "head-of-service-branch",
-    "head-service-branch",
-    "planning-budget-team-leader",
-    "planning-and-budget-team-leader",
-    "procurement-requester",
-    "record-office",
-    "records-office",
-  ].includes(role);
+  return Boolean(authService.getStoredUser() || authService.getStoredRoles().length);
 }
 
 export default function ProcurementPage() {

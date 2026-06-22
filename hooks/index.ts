@@ -4,6 +4,7 @@ export {
   useRolesLiteQuery,
   useRolesLiteQuery as useUserRolesLiteQuery,
   useOfficesLiteQuery,
+  useDepartmentsLiteQuery,
   useCreateUserMutation,
   useUpdateUserMutation,
   useDeleteUserMutation,

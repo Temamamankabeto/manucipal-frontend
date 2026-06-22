@@ -27,16 +27,20 @@ export type UserStatus = "active" | "disabled";
 
 export type UserRoleName =
   | "Super Admin"
-  | "Admin"
   | "Manager"
   | "Head of Development Branch"
   | "Head of Service Branch"
-  | "Planning & Budget Team Leader"
-  | "Planning & Budget Expert"
-  | "Procurement Requester"
-  | "Payment Requester"
-  | "Records Office"
-  | "Finance";
+  | "Team Leader"
+  | "Expert"
+  | "Secretory"
+  | "Accountant"
+  | "Record Officer";
+
+export type DepartmentItem = {
+  id: number;
+  office_id: number;
+  name: string;
+};
 
 export type RoleItem = {
   id: number;
@@ -68,10 +72,12 @@ export type UserItem = {
   admin_level?: AdminLevel | null;
   professional_level?: ProfessionalLevel | null;
   office_id?: number | null;
+  department_id?: number | null;
   sub_city_id?: number | null;
   woreda_id?: number | null;
   zone_id?: number | null;
   office?: OfficeItem | null;
+  department?: DepartmentItem | null;
   sub_city?: OfficeItem | null;
   woreda?: OfficeItem | null;
   zone?: OfficeItem | null;
@@ -90,6 +96,7 @@ export type UserListParams = {
   role?: UserRoleName | string;
   admin_level?: AdminLevel | "all";
   office_id?: number | string | null;
+  department_id?: number | string | null;
   sub_city_id?: number | string | null;
   woreda_id?: number | string | null;
   zone_id?: number | string | null;
@@ -107,6 +114,7 @@ export type CreateUserPayload = {
   professional_level?: ProfessionalLevel | null;
   address?: string;
   office_id?: number | null;
+  department_id?: number | null;
   sub_city_id?: number | null;
   woreda_id?: number | null;
   zone_id?: number | null;

@@ -23,6 +23,10 @@ export type TranslationListParams = {
 };
 
 export const translationService = {
+  async resources() {
+    const { data } = await api.get("/translations/resources");
+    return data;
+  },
   async list(params?: TranslationListParams) {
     const { data } = await api.get("/admin/translations", { params });
     return data;

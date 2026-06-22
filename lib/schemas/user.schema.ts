@@ -42,26 +42,20 @@ function normalizeRole(role?: string | null) {
   return (role || "").toLowerCase().trim();
 }
 
-function isPaymentProcurementRole(role?: string | null) {
-  return [
-    "manager",
-    "head of development branch",
-    "head of service branch",
-    "planning & budget team leader",
-    "planning & budget expert",
-    "payment requester",
-    "procurement requester",
-    "record office",
-    "records office",
-    "finance",
-    "finance accountant",
-    "asset team leader",
-    "machinery team leader",
-  ].includes(normalizeRole(role));
-}
+const allowedUserManagementRoles = [
+  "super admin",
+  "manager",
+  "head of development branch",
+  "head of service branch",
+  "team leader",
+  "expert",
+  "secretory",
+  "accountant",
+  "record officer",
+];
 
-function isPlanningBudgetExpert(role?: string | null) {
-  return normalizeRole(role) === "planning & budget expert";
+function isOfficeDepartmentUserRole(role?: string | null) {
+  return allowedUserManagementRoles.includes(normalizeRole(role));
 }
 
 /**
@@ -84,17 +78,24 @@ function validateAdminScope(
   value: ScopeShape,
   ctx: z.RefinementCtx
 ) {
-  // Super Admin and payment/procurement workflow roles do not use municipality scope.
-  if (normalizeRole(value.role) === "super admin" || isPaymentProcurementRole(value.role)) {
-    if (isPlanningBudgetExpert(value.role) && !value.professional_level) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["professional_level"],
-        message: "Level is required for Planning & Budget Expert",
-      });
-    }
+  if (!value.office_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["office_id"],
+      message: "Office is required",
+    });
+  }
 
+  if (isOfficeDepartmentUserRole(value.role)) {
     return;
+  }
+
+  if (!value.office_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["office_id"],
+      message: "Office is required",
+    });
   }
 
   if (!value.admin_level) {
@@ -143,14 +144,7 @@ function validateAdminScope(
  *
  * IMPORTANT:
  * Removed hardcoded z.enum([...])
- * This allows ALL backend roles:
- * - Super Admin
- * - Admin
- * - Asset Manager
- * - Store Keeper
- * - Auditor
- * - Finance Officer
- * - etc.
+ * User management allows only the configured office/department roles.
  */
 const common = {
   name: z
@@ -193,6 +187,7 @@ const common = {
     .or(z.literal("")),
 
   office_id: nullableNumber,
+  department_id: nullableNumber,
   sub_city_id: nullableNumber,
   woreda_id: nullableNumber,
   zone_id: nullableNumber,

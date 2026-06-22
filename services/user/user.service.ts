@@ -3,6 +3,7 @@ import type {
   ApiEnvelope,
   AssignUserRolePayload,
   CreateUserPayload,
+  DepartmentItem,
   OfficeItem,
   PaginatedResponse,
   PermissionItem,
@@ -146,6 +147,14 @@ export const userService = {
   async officesLite(params: { type?: string; parent_id?: number | string | null } = {}) {
     const response = await api.get("/admin/users/offices-lite", { params: cleanParams(params) });
     return Array.isArray(response.data?.data) ? (response.data.data as OfficeItem[]) : [];
+  },
+
+  async departmentsLite(params: { office_id?: number | string | null } = {}) {
+    const response = await api.get("/admin/departments", {
+      params: cleanParams({ ...params, all: true }),
+    });
+
+    return Array.isArray(response.data?.data) ? (response.data.data as DepartmentItem[]) : [];
   },
 
   async roles(params: RoleListParams = {}) {

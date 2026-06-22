@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import { usePaymentCategories, usePaymentTypes } from "@/hooks/payment/use-payme
 
 export default function CreatePaymentPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [requestingEntity, setRequestingEntity] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [typeId, setTypeId] = useState("");
@@ -38,7 +40,7 @@ export default function CreatePaymentPage() {
   );
 
   const createMutation = useCreatePaymentRequest(() => {
-    toast.success("Payment request created");
+    toast.success(t("payment_request_created"));
     router.push("/dashboard/payment");
   });
 
@@ -61,29 +63,29 @@ export default function CreatePaymentPage() {
   return (
     <form onSubmit={submit} className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Create Payment Request</h1>
+        <h1 className="text-2xl font-bold">{t("create_payment_request")}</h1>
         <p className="text-sm text-muted-foreground">
-          Create the request first. Receiver is selected during submit on the detail page.
+          {t("create_payment_request_description")}
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Payment Request Information</CardTitle>
+          <CardTitle>{t("payment_request_information")}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
-            <Label>Requesting Entity</Label>
+            <Label>{t("requesting_entity")}</Label>
             <Input
               required
               value={requestingEntity}
               onChange={(event) => setRequestingEntity(event.target.value)}
-              placeholder="Office / department / organization"
+              placeholder={t("office_department_organization")}
             />
           </div>
 
           <div>
-            <Label>Payment Category</Label>
+            <Label>{t("payment_category")}</Label>
             <Select
               value={categoryId}
               onValueChange={(value) => {
@@ -93,7 +95,7 @@ export default function CreatePaymentPage() {
               required
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select payment category" />
+                <SelectValue placeholder={t("select_payment_category")} />
               </SelectTrigger>
               <SelectContent>
                 {categories.map((category) => (
@@ -106,10 +108,10 @@ export default function CreatePaymentPage() {
           </div>
 
           <div>
-            <Label>Payment Type</Label>
+            <Label>{t("payment_type")}</Label>
             <Select value={typeId} onValueChange={setTypeId} required disabled={!categoryId}>
               <SelectTrigger>
-                <SelectValue placeholder={categoryId ? "Select payment type" : "Select category first"} />
+                <SelectValue placeholder={categoryId ? t("select_payment_type") : t("select_category_first")} />
               </SelectTrigger>
               <SelectContent>
                 {types.map((type) => (
@@ -122,12 +124,12 @@ export default function CreatePaymentPage() {
           </div>
 
           <div className="md:col-span-2">
-            <Label>Payment Purpose / Justification</Label>
+            <Label>{t("payment_purpose_justification")}</Label>
             <Textarea
               required
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Write payment reason / justification"
+              placeholder={t("write_payment_reason_justification")}
             />
           </div>
         </CardContent>
@@ -135,11 +137,11 @@ export default function CreatePaymentPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Documents</CardTitle>
+          <CardTitle>{t("documents")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-2">
-            <Label>Upload or scan payment documents</Label>
+            <Label>{t("upload_or_scan_payment_documents")}</Label>
             <Input
               key={fileKey}
               type="file"
@@ -164,7 +166,7 @@ export default function CreatePaymentPage() {
                     <span className="truncate">{file.name}</span>
                   </div>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setAttachments((current) => current.filter((_, i) => i !== index))}>
-                    Remove
+                    {t("remove")}
                   </Button>
                 </div>
               ))}
@@ -174,7 +176,7 @@ export default function CreatePaymentPage() {
       </Card>
 
       <Button disabled={createMutation.isPending || !categoryId || !typeId}>
-        {createMutation.isPending ? "Saving..." : "Save Draft"}
+        {createMutation.isPending ? t("saving") : t("save_draft")}
       </Button>
     </form>
   );

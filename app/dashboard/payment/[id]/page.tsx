@@ -62,7 +62,7 @@ const managerActions = {
     {
       action: "manager_approve",
       label: "Accept & Forward",
-      note: "Accepted and forwarded to Planning & Budget Team Leader",
+      note: "Accepted and forwarded to Department Team Leader",
       icon: CheckCircle2,
     },
     {
@@ -96,7 +96,7 @@ const ROLE_ACTIONS: Record<string, Record<string, WorkflowAction[]>> = {
   "municipal-manager": { ...draftSubmitActions, ...managerActions },
   "head-of-development-branch": { ...draftSubmitActions, ...managerActions },
   "head-of-service-branch": { ...draftSubmitActions, ...managerActions },
-  "planning-budget-team-leader": {
+  "team-leader": {
     ...draftSubmitActions,
     budget_tl_review: [
       {
@@ -129,7 +129,7 @@ const ROLE_ACTIONS: Record<string, Record<string, WorkflowAction[]>> = {
       },
     ],
   },
-  "planning-budget-experts": {
+  expert: {
     budget_expert_processing: [
       {
         action: "expert_complete",
@@ -201,15 +201,21 @@ function normalize(value?: string | null) {
 
 function resolveRole(role: string) {
   const aliases: Record<string, string> = {
-    "planning-and-budget-expert": "planning-budget-experts",
-    "planning-and-budget-experts": "planning-budget-experts",
-    "planing-and-budget-expert": "planning-budget-experts",
-    "planning-budget-expert": "planning-budget-experts",
-    "planning-and-budget-team-leader": "planning-budget-team-leader",
-    "planing-and-budget-team-leader": "planning-budget-team-leader",
-    "budget-team-leader": "planning-budget-team-leader",
+    "planning-and-budget-expert": "expert",
+    "planning-and-budget-experts": "expert",
+    "planing-and-budget-expert": "expert",
+    "planning-budget-expert": "expert",
+    "planning-budget-experts": "expert",
+    "planning-and-budget-team-leader": "team-leader",
+    "planing-and-budget-team-leader": "team-leader",
+    "planning-budget-team-leader": "team-leader",
+    "budget-team-leader": "team-leader",
+    "department-head": "team-leader",
+    "team-leader-department-head": "team-leader",
     "record-office": "records-office",
     "records-office": "records-office",
+    "record-officer": "records-office",
+    secretory: "records-office",
     "finance-department": "finance",
     "finance-accountant": "finance-accountant",
     accountant: "finance-accountant",
@@ -373,14 +379,29 @@ export default function PaymentDetailPage() {
   const [budgetYear, setBudgetYear] = useState("");
   const [referenceNo, setReferenceNo] = useState("");
   const [officialDate, setOfficialDate] = useState("");
+  const [attachmentReferenceNo, setAttachmentReferenceNo] = useState("");
+  const [attachmentOfficialDate, setAttachmentOfficialDate] = useState("");
   const [showApprovalHistory, setShowApprovalHistory] = useState(false);
   const [printCopy, setPrintCopy] = useState<"remaining" | "exit">("remaining");
+  const [showAttachmentPreview, setShowAttachmentPreview] = useState(false);
+  const [showAttachmentDraftForm, setShowAttachmentDraftForm] = useState(false);
   const [submitReceiverId, setSubmitReceiverId] = useState("");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
+  const [selectedTeamLeaderId, setSelectedTeamLeaderId] = useState("");
   const [selectedExpertId, setSelectedExpertId] = useState("");
   const [paidAmount, setPaidAmount] = useState("");
   const [paidDate, setPaidDate] = useState("");
   const [voucherNo, setVoucherNo] = useState("");
   const [financeRemark, setFinanceRemark] = useState("");
+  const [attachmentTo, setAttachmentTo] = useState("");
+  const [attachmentAddress, setAttachmentAddress] = useState("");
+  const [attachmentCase, setAttachmentCase] = useState("");
+  const [attachmentBody, setAttachmentBody] = useState("");
+  const [attachmentGg, setAttachmentGg] = useState<string[]>([
+    "Waajjiraa Hojii Gaggeessaa tiif",
+    "Kuta Baajataa tiif",
+    "Adamaa",
+  ]);
 
   const data = query.data;
 
@@ -390,10 +411,23 @@ export default function PaymentDetailPage() {
     enabled: data?.status === "draft",
   });
 
+  const departmentsQuery = useQuery({
+    queryKey: ["payment", "departments"],
+    queryFn: () => paymentService.departments(),
+    enabled: data?.status === "manager_review",
+  });
+
+  const departmentTeamLeadersQuery = useQuery({
+    queryKey: ["payment", "department-team-leaders", selectedDepartmentId],
+    queryFn: () => paymentService.departmentTeamLeaders(selectedDepartmentId),
+    enabled: data?.status === "manager_review" && Boolean(selectedDepartmentId),
+  });
+
   const planningBudgetExpertsQuery = useQuery({
-    queryKey: ["payment", "planning-budget-experts"],
-    queryFn: () => paymentService.planningBudgetExperts(),
-    enabled: data?.status === "budget_tl_review",
+    queryKey: ["payment", "department-experts", data?.department_id],
+    queryFn: () => paymentService.planningBudgetExperts(data?.department_id),
+    enabled:
+      data?.status === "budget_tl_review" && Boolean(data?.department_id),
   });
 
   const budgetAvailabilityQuery = usePaymentTypeBudgetBalance(
@@ -439,11 +473,16 @@ export default function PaymentDetailPage() {
   const isPerDiem = data ? isPerDiemType(data) : false;
   const isFinanceUser = role === "finance-accountant" || role === "finance";
 
+  const isManagerForwardStep =
+    role === "manager" && status === "manager_review";
+  const isManagerFinalAttachmentStep =
+    role === "manager" && status === "manager_final_review" && !isPerDiem;
+
   const isBudgetExpertStep =
-    role === "planning-budget-experts" && status === "budget_expert_processing";
+    role === "expert" && status === "budget_expert_processing";
 
   const isBudgetTlForwardStep =
-    role === "planning-budget-team-leader" && status === "budget_tl_review";
+    role === "team-leader" && status === "budget_tl_review";
 
   const isRecordsStep =
     role === "records-office" && status === "records_processing";
@@ -458,12 +497,35 @@ export default function PaymentDetailPage() {
     setBudgetYear(data.budget_year ?? "");
     setReferenceNo(data.reference_no ?? "");
     setOfficialDate(formatDate(data.official_date));
+    setAttachmentReferenceNo(data.attachment_reference_no ?? "");
+    setAttachmentOfficialDate(formatDate(data.attachment_official_date));
     setPaidAmount(String(data.paid_amount ?? data.amount ?? ""));
     setPaidDate(
       formatDate(data.paid_date) || new Date().toISOString().slice(0, 10),
     );
     setVoucherNo(data.voucher_no ?? "");
     setFinanceRemark(data.finance_remark ?? "");
+    setAttachmentTo(data.attachment_to ?? "");
+    setAttachmentAddress(data.attachment_address ?? "");
+    setAttachmentCase(data.attachment_case ?? "");
+    setAttachmentBody(data.attachment_body ?? "");
+    setAttachmentGg(
+      Array.isArray(data.attachment_gg) && data.attachment_gg.length
+        ? data.attachment_gg
+        : ["Waajjiraa Hojii Gaggeessaa tiif", "Kuta Baajataa tiif", "Adamaa"],
+    );
+
+    const existingAttachmentDraft =
+      Boolean(data.attachment_to) ||
+      Boolean(data.attachment_address) ||
+      Boolean(data.attachment_case) ||
+      Boolean(data.attachment_body) ||
+      (Array.isArray(data.attachment_gg) && data.attachment_gg.length > 0);
+
+    setShowAttachmentDraftForm(existingAttachmentDraft);
+    setSelectedDepartmentId(String(data.department_id ?? ""));
+    setSelectedTeamLeaderId(String(data.assigned_team_leader_id ?? ""));
+    setSelectedExpertId(String(data.assigned_expert_id ?? ""));
 
     const sourceItems = data.items?.length
       ? data.items
@@ -548,8 +610,79 @@ export default function PaymentDetailPage() {
     );
   }
 
+  function updateAttachmentGg(index: number, value: string) {
+    setAttachmentGg((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? value : item)),
+    );
+  }
+
+  function addAttachmentGg() {
+    setAttachmentGg((current) => [...current, ""]);
+  }
+
+  function removeAttachmentGg(index: number) {
+    setAttachmentGg((current) =>
+      current.length === 1
+        ? current
+        : current.filter((_, itemIndex) => itemIndex !== index),
+    );
+  }
+
+  const officialAttachmentPayload = {
+    attachment_to: attachmentTo,
+    attachment_address: attachmentAddress,
+    attachment_case: attachmentCase,
+    attachment_body: attachmentBody,
+    attachment_gg: attachmentGg.filter((item) => item.trim() !== ""),
+  };
+
+  const isManagerAttachmentComplete =
+    attachmentTo.trim() !== "" &&
+    attachmentAddress.trim() !== "" &&
+    attachmentCase.trim() !== "" &&
+    attachmentBody.trim() !== "" &&
+    attachmentGg.some((item) => item.trim() !== "");
+
+  const hasOfficialAttachmentDraft =
+    Boolean(data?.attachment_to) ||
+    Boolean(data?.attachment_address) ||
+    Boolean(data?.attachment_case) ||
+    Boolean(data?.attachment_body) ||
+    (Array.isArray(data?.attachment_gg) && data.attachment_gg.length > 0) ||
+    isManagerAttachmentComplete;
+
+  function saveManagerAttachmentDraft() {
+    actionMutation.mutate({
+      id,
+      payload: {
+        action: "save_manager_final_attachment_draft",
+        note: "Payment official attachment draft saved",
+        ...officialAttachmentPayload,
+      },
+    });
+  }
+
+  function saveRecordAttachmentDraft() {
+    actionMutation.mutate({
+      id,
+      payload: {
+        action: "save_record_attachment_draft",
+        note: "Record attachment draft saved",
+        attachment_reference_no: attachmentReferenceNo,
+        attachment_official_date: attachmentOfficialDate,
+      },
+    });
+  }
+
   const allowedActions = useMemo(() => {
     if (!data) return [];
+
+    // Every authenticated role can submit its own draft payment request.
+    // After submission, the request is visible only to the selected Manager/Head
+    // through current_handler_id on the backend.
+    if (status === "draft") {
+      return draftSubmitActions.draft;
+    }
 
     if (role === "super-admin") {
       return Object.values(ROLE_ACTIONS).flatMap(
@@ -599,6 +732,7 @@ export default function PaymentDetailPage() {
 
   function printPaper(copy: "remaining" | "exit" = "remaining") {
     setShowApprovalHistory(false);
+    setShowAttachmentPreview(false);
     setPrintCopy(copy);
 
     if (isPerDiem) {
@@ -616,6 +750,32 @@ export default function PaymentDetailPage() {
     setTimeout(() => window.print(), 50);
   }
 
+  function previewAttachment() {
+    setShowApprovalHistory(false);
+    setShowAttachmentPreview(true);
+  }
+
+  function printAttachment() {
+    setShowApprovalHistory(false);
+    setShowAttachmentPreview(true);
+    setTimeout(() => window.print(), 50);
+  }
+
+  const canPreviewAttachment =
+    !isPerDiem &&
+    (isManagerFinalAttachmentStep ||
+      ((isRecordsStep || role === "records-office") && hasOfficialAttachmentDraft) ||
+      hasOfficialAttachmentDraft);
+
+  const canPrintAttachment =
+    !isPerDiem && role === "records-office" && hasOfficialAttachmentDraft;
+
+  const shouldApplyRecordAttachmentSeal = [
+    "sent_to_finance",
+    "payment_completed",
+    "paid",
+  ].includes(status);
+
   return (
     <div className="space-y-5 bg-muted/30 p-4 print:bg-white print:p-0">
       <style jsx global>{`
@@ -630,11 +790,14 @@ export default function PaymentDetailPage() {
           }
 
           #payment-print-area,
-          #payment-print-area * {
+          #payment-print-area *,
+          #official-attachment-print-area,
+          #official-attachment-print-area * {
             visibility: visible !important;
           }
 
-          #payment-print-area {
+          #payment-print-area,
+          #official-attachment-print-area {
             position: fixed !important;
             inset: 0 auto auto 0 !important;
             width: 194mm !important;
@@ -659,11 +822,29 @@ export default function PaymentDetailPage() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => setShowApprovalHistory((value) => !value)}
+            onClick={() => {
+              setShowAttachmentPreview(false);
+              setShowApprovalHistory((value) => !value);
+            }}
           >
             <History className="mr-2 h-4 w-4" />
             Approval History
           </Button>
+
+          {canPreviewAttachment ? (
+            <>
+              <Button variant="outline" onClick={previewAttachment}>
+                <FileText className="mr-2 h-4 w-4" />
+                Preview Attachment
+              </Button>
+              {canPrintAttachment ? (
+                <Button variant="outline" onClick={printAttachment}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print Attachment
+                </Button>
+              ) : null}
+            </>
+          ) : null}
 
           {!isPerDiem && !isFinanceUser ? (
             <>
@@ -683,6 +864,99 @@ export default function PaymentDetailPage() {
       {!showApprovalHistory ? (
         isPerDiem ? (
           <PerDiemPrintableEmployees payment={data} />
+        ) : showAttachmentPreview ? (
+          <Card
+            id="official-attachment-print-area"
+            className="relative mx-auto min-h-[1120px] max-w-[980px] overflow-hidden rounded-none border bg-white shadow-sm print:shadow-none"
+          >
+            <CardContent className="relative z-10 p-12 font-serif text-[20px] leading-9 print:p-0 print:text-[14px] print:leading-6">
+              <div className="pointer-events-none absolute left-16 top-10 z-20 print:left-10 print:top-6">
+                <TiterImage
+                  signer={data.records_signer}
+                  className="h-40 max-w-[320px] -rotate-[38deg] object-contain opacity-95 print:h-32 print:max-w-[260px]"
+                />
+              </div>
+
+              <div className="mb-16 flex justify-end text-[20px] italic print:text-[14px]">
+                <div className="space-y-5">
+                  <div>
+                    Lakk{" "}
+                    <span className="inline-block min-w-44 border-b border-black px-2">
+                      {data.attachment_reference_no || attachmentReferenceNo || ""}
+                    </span>
+                  </div>
+                  <div>
+                    Guyyaa{" "}
+                    <span className="inline-block min-w-44 border-b border-black px-2">
+                      {ethiopianDate(data.attachment_official_date || attachmentOfficialDate)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-20 space-y-10">
+                <p className="italic underline">
+                  To:{" "}
+                  <span className="inline-block min-w-44 border-b border-black px-2 not-italic">
+                    {attachmentTo || data.attachment_to || ""}
+                  </span>
+                </p>
+                <p className="italic underline">
+                  Adress:{" "}
+                  <span className="inline-block min-w-44 border-b border-black px-2 not-italic">
+                    {attachmentAddress || data.attachment_address || ""}
+                  </span>
+                </p>
+                <p className="italic underline">
+                  Case:-{" "}
+                  <span className="inline-block min-w-44 border-b border-black px-2 not-italic">
+                    {attachmentCase || data.attachment_case || ""}
+                  </span>
+                </p>
+                <div className="min-h-[270px]">
+                  <p className="mb-4 italic underline">Body :</p>
+                  <p className="whitespace-pre-line">
+                    {attachmentBody || data.attachment_body || ""}
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative mt-20 min-h-[210px]">
+                {shouldApplyRecordAttachmentSeal && recordsStamp ? (
+                  <img
+                    src={recordsStamp}
+                    alt="records office stamp"
+                    className="pointer-events-none absolute left-1/3 top-10 z-20 h-36 w-36 -translate-x-1/2 object-contain opacity-95 print:h-28 print:w-28"
+                  />
+                ) : null}
+
+
+                <div className="absolute right-0 top-0 w-[360px] text-right font-bold">
+                  <p>Nagaa Wajjiin</p>
+                  <div className="mt-2 flex justify-end">
+                    <SignerImages
+                      signer={data.manager_final_signer}
+                      align="end"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 text-[20px] print:text-[13px]">
+                <p className="mb-4 underline">G.G</p>
+                {(attachmentGg.length
+                  ? attachmentGg
+                  : data.attachment_gg || []
+                ).map((item: string, index: number) =>
+                  item?.trim() ? (
+                    <p key={`${item}-${index}`} className="mb-2">
+                      ➢&nbsp;&nbsp; {item}
+                    </p>
+                  ) : null,
+                )}
+              </div>
+            </CardContent>
+          </Card>
         ) : (
           <Card
             id="payment-print-area"
@@ -819,7 +1093,7 @@ export default function PaymentDetailPage() {
                 <p>
                   Qar.{" "}
                   <span className="inline-block min-w-[80%] border-b border-black px-2">
-                    {money(total)} ({data.description || ""})
+                    {money(total)} ({numberToWords(total)})
                   </span>
                 </p>
 
@@ -1022,7 +1296,9 @@ export default function PaymentDetailPage() {
                     Budget Recommendation
                   </p>
                   <p className="text-emerald-900">
-                    Select fiscal year, BI Code, and Account Code. Balance Not Committed is shown here for guidance only. Amount and description must be filled by the Planning & Budget Expert.
+                    Select fiscal year, BI Code, and Account Code. Balance Not
+                    Committed is shown here for guidance only. Amount and
+                    description must be filled by the Planning & Budget Expert.
                   </p>
                 </div>
                 <Badge variant="outline">
@@ -1039,9 +1315,13 @@ export default function PaymentDetailPage() {
                         <th className="px-3 py-2">BI Code / Office Code</th>
                         <th className="px-3 py-2">Account Code</th>
                         <th className="px-3 py-2">Account Description</th>
-                        <th className="px-3 py-2 text-right">Adjusted Budget</th>
+                        <th className="px-3 py-2 text-right">
+                          Adjusted Budget
+                        </th>
                         <th className="px-3 py-2 text-right">Debit</th>
-                        <th className="px-3 py-2 text-right">Balance Not Committed</th>
+                        <th className="px-3 py-2 text-right">
+                          Balance Not Committed
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1051,14 +1331,33 @@ export default function PaymentDetailPage() {
                           const budget = item.selected_budget;
 
                           return (
-                            <tr key={`${budget.id ?? budget.budget_code}-${recommendationIndex}`} className="border-t">
-                              <td className="px-3 py-2">{budget.fiscal_year ?? budgetYear ?? "-"}</td>
-                              <td className="px-3 py-2 font-medium">{budget.bi_code ?? officeCode ?? "-"}</td>
-                              <td className="px-3 py-2">{budget.budget_code ?? item.budget_code ?? "-"}</td>
-                              <td className="px-3 py-2">{budget.account_name ?? budget.description ?? "-"}</td>
-                              <td className="px-3 py-2 text-right">{money(budget.allocated_amount)}</td>
-                              <td className="px-3 py-2 text-right">{money(budget.used_amount)}</td>
-                              <td className="px-3 py-2 text-right font-semibold text-emerald-700">{money(budget.remaining_amount)}</td>
+                            <tr
+                              key={`${budget.id ?? budget.budget_code}-${recommendationIndex}`}
+                              className="border-t"
+                            >
+                              <td className="px-3 py-2">
+                                {budget.fiscal_year ?? budgetYear ?? "-"}
+                              </td>
+                              <td className="px-3 py-2 font-medium">
+                                {budget.bi_code ?? officeCode ?? "-"}
+                              </td>
+                              <td className="px-3 py-2">
+                                {budget.budget_code ?? item.budget_code ?? "-"}
+                              </td>
+                              <td className="px-3 py-2">
+                                {budget.account_name ??
+                                  budget.description ??
+                                  "-"}
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                {money(budget.allocated_amount)}
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                {money(budget.used_amount)}
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-emerald-700">
+                                {money(budget.remaining_amount)}
+                              </td>
                             </tr>
                           );
                         })}
@@ -1067,7 +1366,8 @@ export default function PaymentDetailPage() {
                 </div>
               ) : (
                 <p className="text-emerald-900">
-                  No Account Code selected yet. Balance Not Committed will appear here after selecting a Budget Code.
+                  No Account Code selected yet. Balance Not Committed will
+                  appear here after selecting a Budget Code.
                 </p>
               )}
             </div>
@@ -1143,6 +1443,144 @@ export default function PaymentDetailPage() {
         </Card>
       ) : null}
 
+      {isManagerFinalAttachmentStep ? (
+        <div className="space-y-3 print:hidden">
+          {!showAttachmentDraftForm ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowAttachmentDraftForm(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Attachment
+            </Button>
+          ) : null}
+
+          {showAttachmentDraftForm ? (
+            <Card className="rounded-2xl border bg-card shadow-sm">
+              <CardHeader>
+                <CardTitle>Official Attachment Draft</CardTitle>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                <div className="rounded-xl border bg-blue-50/60 p-4 text-sm text-blue-950">
+                  Add attachment details first, save as draft, then final approve.
+                  Existing Manager / Head forwarding logic is unchanged.
+                </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium">To</label>
+                <Input
+                  value={attachmentTo}
+                  onChange={(event) => setAttachmentTo(event.target.value)}
+                  placeholder="To"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Address</label>
+                <Input
+                  value={attachmentAddress}
+                  onChange={(event) => setAttachmentAddress(event.target.value)}
+                  placeholder="Address"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Case</label>
+              <Input
+                value={attachmentCase}
+                onChange={(event) => setAttachmentCase(event.target.value)}
+                placeholder="Case"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Body</label>
+              <Textarea
+                value={attachmentBody}
+                onChange={(event) => setAttachmentBody(event.target.value)}
+                placeholder="Body"
+                className="min-h-32"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium">G.G</label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={addAttachmentGg}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add G.G
+                </Button>
+              </div>
+
+              {attachmentGg.map((item, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    value={item}
+                    onChange={(event) =>
+                      updateAttachmentGg(index, event.target.value)
+                    }
+                    placeholder="G.G recipient"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    disabled={attachmentGg.length === 1}
+                    onClick={() => removeAttachmentGg(index)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={
+                  actionMutation.isPending || !isManagerAttachmentComplete
+                }
+                onClick={saveManagerAttachmentDraft}
+              >
+                Save Attachment Draft
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!isManagerAttachmentComplete}
+                onClick={previewAttachment}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Preview Attachment
+              </Button>
+              {canPrintAttachment ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!isManagerAttachmentComplete}
+                  onClick={printAttachment}
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print Attachment
+                </Button>
+              ) : null}
+              </div>
+            </CardContent>
+          </Card>
+          ) : null}
+        </div>
+      ) : null}
+
       <Card className="rounded-2xl border bg-card shadow-sm print:hidden">
         <CardHeader>
           <CardTitle>Workflow Actions</CardTitle>
@@ -1180,6 +1618,84 @@ export default function PaymentDetailPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+              ) : null}
+
+              {isManagerForwardStep ? (
+                <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Department</label>
+                      <select
+                        required
+                        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                        value={selectedDepartmentId}
+                        onChange={(event) => {
+                          setSelectedDepartmentId(event.target.value);
+                          setSelectedTeamLeaderId("");
+                        }}
+                        disabled={departmentsQuery.isLoading}
+                      >
+                        <option value="">
+                          {departmentsQuery.isLoading
+                            ? "Loading departments..."
+                            : "Select department"}
+                        </option>
+
+                        {(departmentsQuery.data ?? []).map(
+                          (department: any) => (
+                            <option key={department.id} value={department.id}>
+                              {department.name}
+                              {department.office?.name
+                                ? ` — ${department.office.name}`
+                                : ""}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">
+                        Department Team Leader
+                      </label>
+                      <select
+                        required
+                        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                        value={selectedTeamLeaderId}
+                        onChange={(event) =>
+                          setSelectedTeamLeaderId(event.target.value)
+                        }
+                        disabled={
+                          !selectedDepartmentId ||
+                          departmentTeamLeadersQuery.isLoading
+                        }
+                      >
+                        <option value="">
+                          {departmentTeamLeadersQuery.isLoading
+                            ? "Loading Team Leaders..."
+                            : "Select Team Leader"}
+                        </option>
+
+                        {(departmentTeamLeadersQuery.data ?? []).map(
+                          (leader: any) => (
+                            <option key={leader.id} value={leader.id}>
+                              {leader.name} —{" "}
+                              {leader.display_role ?? "Team Leader"}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </div>
+                  </div>
+
+                  {selectedDepartmentId &&
+                  !departmentTeamLeadersQuery.isLoading &&
+                  (departmentTeamLeadersQuery.data ?? []).length === 0 ? (
+                    <p className="text-xs text-destructive">
+                      No active Team Leader found in the selected department.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -1302,9 +1818,7 @@ export default function PaymentDetailPage() {
                   </div>
 
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium">
-                      Planning & Budget Expert
-                    </label>
+                    <label className="text-sm font-medium">Expert</label>
                     <select
                       required
                       className="h-10 w-full rounded-md border bg-background px-3 text-sm"
@@ -1316,17 +1830,15 @@ export default function PaymentDetailPage() {
                     >
                       <option value="">
                         {planningBudgetExpertsQuery.isLoading
-                          ? "Loading Planning & Budget Experts..."
-                          : "Select Planning & Budget Expert"}
+                          ? "Loading Experts..."
+                          : "Select Expert"}
                       </option>
 
                       {(planningBudgetExpertsQuery.data ?? []).map(
                         (expert: any) => (
                           <option key={expert.id} value={expert.id}>
                             {expert.name} —{" "}
-                            {expert.display_role ??
-                              expert.role ??
-                              "Planning & Budget Expert"}
+                            {expert.display_role ?? expert.role ?? "Expert"}
                           </option>
                         ),
                       )}
@@ -1335,9 +1847,8 @@ export default function PaymentDetailPage() {
                     {!planningBudgetExpertsQuery.isLoading &&
                     (planningBudgetExpertsQuery.data ?? []).length === 0 ? (
                       <p className="text-xs text-destructive">
-                        No active Planning & Budget Expert found. Assign the
-                        planning-budget-experts role to at least one active
-                        user.
+                        No active Expert found in this department. Assign the
+                        Expert role and department to at least one active user.
                       </p>
                     ) : null}
                   </div>
@@ -1345,26 +1856,101 @@ export default function PaymentDetailPage() {
               ) : null}
 
               {isRecordsStep ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="text-sm font-medium">
-                      Lakk / Reference No
-                    </label>
-                    <Input
-                      value={referenceNo}
-                      onChange={(event) => setReferenceNo(event.target.value)}
-                      placeholder="Enter reference number"
-                    />
+                <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="text-sm font-medium">
+                        Payment Lakk / Reference No
+                      </label>
+                      <Input
+                        value={referenceNo}
+                        onChange={(event) => setReferenceNo(event.target.value)}
+                        placeholder="Enter payment reference number"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium">
+                        Payment Guyyaa / Date
+                      </label>
+                      <Input
+                        type="date"
+                        value={officialDate}
+                        onChange={(event) =>
+                          setOfficialDate(event.target.value)
+                        }
+                      />
+                    </div>
+
+                    {hasOfficialAttachmentDraft ? (
+                      <>
+                        <div>
+                          <label className="text-sm font-medium">
+                            Attachment Lakk / Reference No
+                          </label>
+                          <Input
+                            value={attachmentReferenceNo}
+                            onChange={(event) =>
+                              setAttachmentReferenceNo(event.target.value)
+                            }
+                            placeholder="Enter attachment reference number"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-sm font-medium">
+                            Attachment Guyyaa / Date
+                          </label>
+                          <Input
+                            type="date"
+                            value={attachmentOfficialDate}
+                            onChange={(event) =>
+                              setAttachmentOfficialDate(event.target.value)
+                            }
+                          />
+                        </div>
+                      </>
+                    ) : null}
                   </div>
 
-                  <div>
-                    <label className="text-sm font-medium">Guyyaa / Date</label>
-                    <Input
-                      type="date"
-                      value={officialDate}
-                      onChange={(event) => setOfficialDate(event.target.value)}
-                    />
-                  </div>
+                  {hasOfficialAttachmentDraft ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={
+                          actionMutation.isPending ||
+                          !attachmentReferenceNo ||
+                          !attachmentOfficialDate
+                        }
+                        onClick={saveRecordAttachmentDraft}
+                      >
+                        Save Attachment Draft
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={previewAttachment}
+                      >
+                        <FileText className="mr-2 h-4 w-4" />
+                        Preview Attachment
+                      </Button>
+                      {canPrintAttachment ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={printAttachment}
+                        >
+                          <Printer className="mr-2 h-4 w-4" />
+                          Print Attachment
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      No official attachment draft was added by Manager / Head for this payment.
+                    </p>
+                  )}
                 </div>
               ) : null}
 
@@ -1458,6 +2044,12 @@ export default function PaymentDetailPage() {
                       disabled={
                         actionMutation.isPending ||
                         (item.action === "submit" && !submitReceiverId) ||
+                        (item.action === "manager_approve" &&
+                          (!selectedDepartmentId || !selectedTeamLeaderId)) ||
+                        (item.action === "manager_final_approve" &&
+                          isManagerFinalAttachmentStep &&
+                          showAttachmentDraftForm &&
+                          !isManagerAttachmentComplete) ||
                         (item.action === "budget_tl_approve" &&
                           !selectedExpertId) ||
                         (item.action === "finance_complete" &&
@@ -1472,8 +2064,20 @@ export default function PaymentDetailPage() {
                             ...(item.action === "submit"
                               ? { send_to_user_id: submitReceiverId }
                               : {}),
+                            ...(item.action === "manager_approve"
+                              ? {
+                                  department_id: selectedDepartmentId,
+                                  team_leader_user_id: selectedTeamLeaderId,
+                                }
+                              : {}),
                             ...(item.action === "budget_tl_approve"
                               ? { expert_user_id: selectedExpertId }
+                              : {}),
+                            ...(item.action === "manager_final_approve" &&
+                            isManagerFinalAttachmentStep &&
+                            showAttachmentDraftForm &&
+                            isManagerAttachmentComplete
+                              ? officialAttachmentPayload
                               : {}),
                             ...(item.action === "expert_complete"
                               ? {
@@ -1492,6 +2096,8 @@ export default function PaymentDetailPage() {
                               ? {
                                   reference_no: referenceNo,
                                   official_date: officialDate,
+                                  attachment_reference_no: attachmentReferenceNo,
+                                  attachment_official_date: attachmentOfficialDate,
                                 }
                               : {}),
                             ...(item.action === "finance_complete"
@@ -1522,3 +2128,17 @@ export default function PaymentDetailPage() {
     </div>
   );
 }
+function numberToWords(n:number): string {
+  const ones=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const tens=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  const conv=(num:number):string=>{
+    if(num<20) return ones[num];
+    if(num<100) return tens[Math.floor(num/10)] + (num%10?' '+ones[num%10]:'');
+    if(num<1000) return ones[Math.floor(num/100)]+' Hundred'+(num%100?' '+conv(num%100):'');
+    if(num<1000000) return conv(Math.floor(num/1000))+' Thousand'+(num%1000?' '+conv(num%1000):'');
+    return String(num);
+  };
+  return conv(Math.floor(n)) + ' Birr Only';
+}
+
+

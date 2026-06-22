@@ -34,6 +34,7 @@ function clean(params: Record<string, unknown>) { return Object.fromEntries(Obje
 function toPaginated<T>(body: any): Paginated<T> { const data = Array.isArray(body?.data) ? body.data : []; const meta = body?.meta ?? {}; return { success: body?.success ?? true, message: body?.message, data, meta: { current_page: Number(meta.current_page ?? 1), per_page: Number(meta.per_page ?? data.length ?? 10), total: Number(meta.total ?? data.length ?? 0), last_page: Number(meta.last_page ?? 1) } }; }
 export const procurementService = {
   async list(params: ProcurementListParams = {}) { const r = await api.get("/admin/procurement-requests", { params: clean(params) }); return toPaginated<ProcurementRequest>(r.data); },
+  async initialApprovers() { const r = await api.get('/admin/procurement-requests-initial-approvers'); return unwrap<ApiEnvelope<any[]>>(r).data ?? []; },
   async show(id: number | string) { const r = await api.get(`/admin/procurement-requests/${id}`); return unwrap<ApiEnvelope<ProcurementRequest>>(r).data; },
   async create(payload: ProcurementPayload) {
     const body = hasAttachments(payload) ? toProcurementFormData(payload) : payload;
@@ -46,4 +47,7 @@ export const procurementService = {
   },
   async update(id: number | string, payload: Partial<ProcurementPayload>) { const r = await api.put(`/admin/procurement-requests/${id}`, payload); return unwrap<ApiEnvelope<ProcurementRequest>>(r).data; },
   async action(id: number | string, payload: ProcurementActionPayload) { const r = await api.post(`/admin/procurement-requests/${id}/action`, payload); return unwrap<ApiEnvelope<ProcurementRequest>>(r).data; },
+  async departments(procurementRequestId?: number | string) { const r = await api.get('/admin/procurement-departments', { params: clean({ procurement_request_id: procurementRequestId }) }); return unwrap<ApiEnvelope<any[]>>(r).data ?? []; },
+  async budgetDepartments() { const r = await api.get('/admin/procurement-budget-departments'); return unwrap<ApiEnvelope<any[]>>(r).data ?? []; },
+  async departmentTeamLeaders(departmentId: number | string) { const r = await api.get(`/admin/procurement-departments/${departmentId}/team-leaders`); return unwrap<ApiEnvelope<any[]>>(r).data ?? []; },
 };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import {
   CheckCircle2,
@@ -30,10 +31,12 @@ import {
   useProcurementRequest,
 } from "@/hooks/procurement/use-procurement";
 import { authService } from "@/services/auth/auth.service";
+import { procurementService } from "@/services/procurement/procurement.service";
 import type { ProcurementItem } from "@/types/procurement/procurement.type";
 
-
-const ETHIOPIAN_DAYS = Array.from({ length: 30 }, (_, index) => String(index + 1).padStart(2, "0"));
+const ETHIOPIAN_DAYS = Array.from({ length: 30 }, (_, index) =>
+  String(index + 1).padStart(2, "0"),
+);
 const ETHIOPIAN_MONTHS = [
   { value: "01", label: "01 - Meskerem" },
   { value: "02", label: "02 - Tikimt" },
@@ -49,7 +52,9 @@ const ETHIOPIAN_MONTHS = [
   { value: "12", label: "12 - Nehase" },
   { value: "13", label: "13 - Pagume" },
 ];
-const ETHIOPIAN_YEARS = Array.from({ length: 31 }, (_, index) => String(2010 + index));
+const ETHIOPIAN_YEARS = Array.from({ length: 31 }, (_, index) =>
+  String(2010 + index),
+);
 
 function splitEthiopianDate(value?: string | null) {
   const [day = "", month = "", year = ""] = String(value ?? "").split("/");
@@ -125,24 +130,39 @@ const ACTIONS: Record<string, Record<string, WorkflowAction[]>> = {
       },
     ],
   },
-  "asset-team-leader": {
+  "team-leader": {
     property_review: [
       {
         action: "asset_team_approve",
-        label: "Fill Form & Approve",
-        note: "Form filled and approved by Asset Team",
+        label: "Fill Form & Forward to Budget",
+        note: "Form filled by Department Team Leader and forwarded to Budget Department",
         icon: CheckCircle2,
       },
       {
         action: "reject",
         label: "Reject with Reason",
-        note: "Rejected by Asset Team",
+        note: "Rejected by Department Team Leader",
+        variant: "destructive",
+        icon: XCircle,
+      },
+    ],
+    budget_review: [
+      {
+        action: "assign_budget_code",
+        label: "Approve & Forward Back",
+        note: "Budget Team Leader approved and forwarded back to the original Manager / Head",
+        icon: CheckCircle2,
+      },
+      {
+        action: "reject",
+        label: "Reject with Reason",
+        note: "Rejected by Budget Team Leader",
         variant: "destructive",
         icon: XCircle,
       },
     ],
   },
-  "planning-budget-team-leader": {
+  "budget-team-leader": {
     draft: [
       {
         action: "submit",
@@ -154,8 +174,8 @@ const ACTIONS: Record<string, Record<string, WorkflowAction[]>> = {
     budget_review: [
       {
         action: "assign_budget_code",
-        label: "Assign Budget Code & Approve",
-        note: "Budget code assigned and approved",
+        label: "Approve & Forward Back",
+        note: "Budget Team Leader approved and forwarded back to the original Manager / Head",
         icon: CheckCircle2,
       },
       {
@@ -200,11 +220,10 @@ const ACTIONS: Record<string, Record<string, WorkflowAction[]>> = {
 const steps = [
   ["draft", "Draft"],
   ["executive_review", "Manager Paraph"],
-  ["property_review", "Asset Form"],
-  ["budget_review", "Budget TL"],
+  ["property_review", "Department TL"],
+  ["budget_review", "Budget Department TL"],
   ["executive_final_review", "Final Approval"],
   ["records_review", "Records"],
-  ["finance", "Finance"],
   ["approved", "Completed"],
 ];
 
@@ -223,13 +242,19 @@ function roleKey(role?: string | null) {
     "branch-head": "manager",
     "head-of-development-branch": "manager",
     "head-of-service-branch": "manager",
-    "asset-machinery-team-leader": "asset-team-leader",
-    "asset-and-machinery-team-leader": "asset-team-leader",
-    "property-team-leader": "asset-team-leader",
-    "machinery-team-leader": "asset-team-leader",
-    "planning-and-budget-team-leader": "planning-budget-team-leader",
-    "planning-budget-team": "planning-budget-team-leader",
+    "asset-machinery-team-leader": "team-leader",
+    "asset-and-machinery-team-leader": "team-leader",
+    "asset-team-leader": "team-leader",
+    "property-team-leader": "team-leader",
+    "machinery-team-leader": "team-leader",
+    "planning-and-budget-team-leader": "budget-team-leader",
+    "planning-budget-team-leader": "budget-team-leader",
+    "planning-budget-team": "budget-team-leader",
+    "team-leader-department-head": "team-leader",
+    "department-head": "team-leader",
     "record-office": "records-office",
+    "record-officer": "records-office",
+    "records-officer": "records-office",
     "finance-department": "finance",
     "preparation-team": "procurement-requester",
   };
@@ -632,9 +657,13 @@ function ApprovalHistoryPage({
 export default function ProcurementDetailPage() {
   const id = String(useParams().id);
   const query = useProcurementRequest(id);
-  const actionMutation = useProcurementAction(() =>
-    toast.success("Workflow updated"),
-  );
+  const actionMutation = useProcurementAction(() => {
+    toast.success("Workflow updated");
+    setModalAction(null);
+    setNote("");
+    setApprovalDescriptionText("");
+    query.refetch();
+  });
   const [note, setNote] = useState("");
   const [approvalDescriptionText, setApprovalDescriptionText] = useState("");
   const [modalAction, setModalAction] = useState<WorkflowAction | null>(null);
@@ -643,24 +672,156 @@ export default function ProcurementDetailPage() {
   const [budgetCode, setBudgetCode] = useState("");
   const [referenceNo, setReferenceNo] = useState("");
   const [officialDateEc, setOfficialDateEc] = useState("");
+  const [attachmentReferenceNo, setAttachmentReferenceNo] = useState("");
+  const [attachmentOfficialDateEc, setAttachmentOfficialDateEc] = useState("");
   const [receiverType, setReceiverType] = useState("manager");
+  const [receiverUserId, setReceiverUserId] = useState("");
   const [forwardToRole, setForwardToRole] = useState("asset_team_leader");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
+  const [selectedTeamLeaderId, setSelectedTeamLeaderId] = useState("");
+  const [selectedBudgetDepartmentId, setSelectedBudgetDepartmentId] =
+    useState("");
+  const [selectedBudgetTeamLeaderId, setSelectedBudgetTeamLeaderId] =
+    useState("");
+  const [showAttachmentDraftForm, setShowAttachmentDraftForm] = useState(false);
+  const [attachmentTo, setAttachmentTo] = useState("");
+  const [attachmentAddress, setAttachmentAddress] = useState("");
+  const [attachmentCase, setAttachmentCase] = useState("");
+  const [attachmentBody, setAttachmentBody] = useState("");
+  const [attachmentGg, setAttachmentGg] = useState<string[]>([
+    "Waajjiraa Hojii Gaggeessaa tiif",
+    "Kuta Bittaa tiif",
+    "Adamaa",
+  ]);
   const data = query.data;
+
+  const initialApproversQuery = useQuery({
+    queryKey: ["procurement", "initial-approvers"],
+    queryFn: () =>
+      procurementService.initialApprovers?.() ?? Promise.resolve([]),
+    enabled: data?.status === "draft",
+  });
+
+  const departmentsQuery = useQuery({
+    queryKey: ["procurement", "departments", id],
+    queryFn: () => procurementService.departments(id),
+    enabled: data?.status === "manager_review",
+  });
+
+  const departmentTeamLeadersQuery = useQuery({
+    queryKey: ["procurement", "department-team-leaders", selectedDepartmentId],
+    queryFn: () =>
+      procurementService.departmentTeamLeaders(selectedDepartmentId),
+    enabled: data?.status === "manager_review" && Boolean(selectedDepartmentId),
+  });
+
+  const budgetDepartmentsQuery = useQuery({
+    queryKey: ["procurement", "budget-departments"],
+    queryFn: () => procurementService.budgetDepartments(),
+    enabled: data?.status === "asset_team_review",
+  });
+
+  const budgetDepartmentTeamLeadersQuery = useQuery({
+    queryKey: [
+      "procurement",
+      "budget-department-team-leaders",
+      selectedBudgetDepartmentId,
+    ],
+    queryFn: () =>
+      procurementService.departmentTeamLeaders(selectedBudgetDepartmentId),
+    enabled:
+      data?.status === "asset_team_review" &&
+      Boolean(selectedBudgetDepartmentId),
+  });
+
   const technicalRecommendation = useMemo(
     () => recommendedTechnicalForward(data),
     [data],
   );
   const status = statusKey(data?.status);
+  const currentUser = authService.getStoredUser();
+  const currentUserId = String(currentUser?.id ?? "");
   const role = roleKey(
-    authService.getStoredRoles()[0] || authService.getStoredUser()?.role,
+    authService.getStoredRoles()[0] || currentUser?.role,
   );
+
+  const hasOfficialAttachmentDraft = Boolean(
+    data?.attachment_to ||
+    data?.attachment_address ||
+    data?.attachment_case ||
+    data?.attachment_body ||
+    (Array.isArray(data?.attachment_gg) && data.attachment_gg.length),
+  );
+
+  const isAttachmentComplete =
+    attachmentTo.trim() !== "" &&
+    attachmentAddress.trim() !== "" &&
+    attachmentCase.trim() !== "" &&
+    attachmentBody.trim() !== "" &&
+    attachmentGg.some((item) => item.trim() !== "");
+
+  const officialAttachmentPayload = {
+    attachment_to: attachmentTo,
+    attachment_address: attachmentAddress,
+    attachment_case: attachmentCase,
+    attachment_body: attachmentBody,
+    attachment_gg: attachmentGg.filter((item) => item.trim() !== ""),
+  };
 
   const allowedActions = useMemo(() => {
     if (!data) return [];
+    if (status === "draft") {
+      return [
+        {
+          action: "submit",
+          label: "Submit Request",
+          note: "Submitted to selected head",
+          icon: Send,
+        },
+      ];
+    }
+
+    const currentHandlerId = String((data as any).current_handler_id ?? "");
+    const technicalTeamLeaderId = String(
+      (data as any).assigned_team_leader_id ??
+        (data as any).team_leader_user_id ??
+        "",
+    );
+    const budgetTeamLeaderId = String(
+      (data as any).budget_team_leader_id ??
+        (data as any).budget_team_leader_user_id ??
+        (data as any).assigned_budget_team_leader_id ??
+        "",
+    );
+
+    // After Asset/Machinery Team Leader forwards to the Budget Department
+    // Team Leader, the technical Team Leader must no longer see workflow
+    // actions for the budget review step. Only the current handler / selected
+    // Budget Department Team Leader can act at budget_review.
+    if (role === "team-leader" && status === "budget_review") {
+      const isBudgetDepartmentHandler =
+        Boolean(currentUserId) &&
+        [currentHandlerId, budgetTeamLeaderId].some(
+          (value) => value && value === currentUserId,
+        );
+
+      return isBudgetDepartmentHandler ? ACTIONS[role]?.[status] || [] : [];
+    }
+
+    if (role === "team-leader" && status === "property_review") {
+      const isTechnicalTeamLeaderHandler =
+        !currentUserId ||
+        [currentHandlerId, technicalTeamLeaderId].some(
+          (value) => value && value === currentUserId,
+        );
+
+      return isTechnicalTeamLeaderHandler ? ACTIONS[role]?.[status] || [] : [];
+    }
+
     if (role === "super-admin")
       return Object.values(ACTIONS).flatMap((a) => a[status] || []);
     return ACTIONS[role]?.[status] || [];
-  }, [data, role, status]);
+  }, [currentUserId, data, role, status]);
 
   if (query.isLoading) return <div>Loading...</div>;
   if (!data) return <div>Request not found.</div>;
@@ -679,9 +840,24 @@ export default function ProcurementDetailPage() {
     (data as any).official_date_ec || data.official_date || "",
   );
   const officialDateParts = splitEthiopianDate(officialDateEc);
-  const setOfficialDatePart = (part: "day" | "month" | "year", value: string) => {
+  const setOfficialDatePart = (
+    part: "day" | "month" | "year",
+    value: string,
+  ) => {
     const next = { ...officialDateParts, [part]: value };
     setOfficialDateEc(buildEthiopianDate(next.day, next.month, next.year));
+  };
+  const attachmentOfficialDateParts = splitEthiopianDate(
+    attachmentOfficialDateEc,
+  );
+  const setAttachmentOfficialDatePart = (
+    part: "day" | "month" | "year",
+    value: string,
+  ) => {
+    const next = { ...attachmentOfficialDateParts, [part]: value };
+    setAttachmentOfficialDateEc(
+      buildEthiopianDate(next.day, next.month, next.year),
+    );
   };
 
   const runAction = (payload: any) =>
@@ -694,6 +870,30 @@ export default function ProcurementDetailPage() {
         ...payload,
       },
     });
+
+  function printProcurement() {
+    document.body.classList.remove("procurement-attachment-printing");
+    document.body.classList.add("procurement-main-printing");
+    setTimeout(() => {
+      window.print();
+      setTimeout(
+        () => document.body.classList.remove("procurement-main-printing"),
+        200,
+      );
+    }, 50);
+  }
+
+  function printProcurementAttachment() {
+    document.body.classList.remove("procurement-main-printing");
+    document.body.classList.add("procurement-attachment-printing");
+    setTimeout(() => {
+      window.print();
+      setTimeout(
+        () => document.body.classList.remove("procurement-attachment-printing"),
+        200,
+      );
+    }, 50);
+  }
 
   return (
     <div className="space-y-6">
@@ -713,14 +913,13 @@ export default function ProcurementDetailPage() {
           position: absolute;
           left: 10mm;
           top: 13mm;
-          width: 62mm;
-          height: 35mm;
+          width: 68mm;
+          height: 38mm;
           object-fit: contain;
           transform: rotate(-21deg);
           transform-origin: center;
-          opacity: 0.28;
-          mix-blend-mode: multiply;
-          z-index: 2;
+          opacity: 0.95;
+          z-index: 12;
           pointer-events: none;
         }
         .procurement-center-titer {
@@ -750,34 +949,31 @@ export default function ProcurementDetailPage() {
           opacity: 1;
         }
         .procurement-titer-img {
-          width: 40mm;
-          max-height: 20mm;
+          width: 44mm;
+          max-height: 22mm;
           object-fit: contain;
           transform: rotate(-18deg);
           transform-origin: center;
-          opacity: 0.34;
-          mix-blend-mode: multiply;
+          opacity: 0.95;
           pointer-events: none;
         }
         .procurement-stamp-img {
-          width: 32mm;
-          height: 32mm;
+          width: 34mm;
+          height: 34mm;
           object-fit: contain;
-          opacity: 0.18;
-          mix-blend-mode: multiply;
+          opacity: 0.95;
           pointer-events: none;
         }
         .procurement-records-stamp {
-          width: 34mm;
-          height: 34mm;
+          width: 36mm;
+          height: 36mm;
           object-fit: contain;
           position: absolute;
           left: 50%;
           top: 50%;
           transform: translate(-50%, -50%);
-          opacity: 0.16;
-          mix-blend-mode: multiply;
-          z-index: 1;
+          opacity: 0.95;
+          z-index: 3;
           pointer-events: none;
         }
         .procurement-table-content {
@@ -845,6 +1041,44 @@ export default function ProcurementDetailPage() {
             width: 39mm !important;
             max-height: 19mm !important;
           }
+          body.procurement-main-printing * {
+            visibility: hidden !important;
+          }
+          body.procurement-main-printing #procurement-print-area,
+          body.procurement-main-printing #procurement-print-area * {
+            visibility: visible !important;
+          }
+          body.procurement-main-printing #procurement-print-area {
+            position: absolute !important;
+            inset: 0 auto auto 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            border: 0 !important;
+          }
+          body.procurement-main-printing #procurement-attachment-print-area {
+            display: none !important;
+          }
+          body.procurement-attachment-printing * {
+            visibility: hidden !important;
+          }
+          body.procurement-attachment-printing
+            #procurement-attachment-print-area,
+          body.procurement-attachment-printing
+            #procurement-attachment-print-area
+            * {
+            visibility: visible !important;
+          }
+          body.procurement-attachment-printing
+            #procurement-attachment-print-area {
+            position: absolute !important;
+            inset: 0 auto auto 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            border: 0 !important;
+          }
+          body.procurement-attachment-printing #procurement-print-area {
+            display: none !important;
+          }
           .print\:hidden {
             display: none !important;
           }
@@ -882,15 +1116,29 @@ export default function ProcurementDetailPage() {
             size="sm"
             variant="outline"
             className="rounded-full"
-            onClick={() => window.print()}
+            onClick={printProcurement}
           >
             <Printer className="mr-2 h-4 w-4" />
-            Print
+            Print Procurement
           </Button>
+          {hasOfficialAttachmentDraft ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full"
+              onClick={printProcurementAttachment}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Print Attachment
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      <Card className="procurement-print-area relative mx-auto w-full max-w-[210mm] overflow-hidden print:border-0 print:shadow-none">
+      <Card
+        id="procurement-print-area"
+        className="procurement-print-area relative mx-auto w-full max-w-[210mm] overflow-hidden print:border-0 print:shadow-none"
+      >
         <div className="absolute right-0 top-0 z-20 hidden h-24 w-24 bg-gradient-to-br from-slate-100 via-white to-slate-300 shadow-inner [clip-path:polygon(100%_0,0_0,100%_100%)] print:hidden md:block" />
         <div className="absolute right-4 top-4 z-30 rounded-full border bg-white px-3 py-1 text-xs font-semibold text-primary shadow-sm print:hidden">
           Current: {status.replaceAll("_", " ")}
@@ -1064,6 +1312,101 @@ export default function ProcurementDetailPage() {
         </CardContent>
       </Card>
 
+      {hasOfficialAttachmentDraft ? (
+        <Card
+          id="procurement-attachment-print-area"
+          className="relative mx-auto w-full max-w-[210mm] overflow-hidden bg-white print:border-0 print:shadow-none"
+        >
+          <CardContent className="relative min-h-[297mm] space-y-8 p-10 font-serif text-base leading-8 print:p-8">
+            {signerUrl(data.records_signer, "titer") ? (
+              <img
+                src={signerUrl(data.records_signer, "titer")}
+                alt="Records Office titer"
+                className="absolute left-8 top-8 z-20 h-36 max-w-[280px] -rotate-[32deg] object-contain opacity-95"
+              />
+            ) : null}
+
+            <div className="flex justify-end text-sm font-semibold">
+              <div className="space-y-3">
+                <div>
+                  Lakk{" "}
+                  <span className="inline-block min-w-48 border-b border-black px-3 font-normal">
+                    {(data as any).attachment_reference_no ??
+                      attachmentReferenceNo ??
+                      ""}
+                  </span>
+                </div>
+                <div>
+                  Guyyaa{" "}
+                  <span className="inline-block min-w-48 border-b border-black px-3 font-normal">
+                    {formatDisplayDate(
+                      (data as any).attachment_official_date_ec ||
+                        attachmentOfficialDateEc ||
+                        "",
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-20">
+              <p className="italic underline">
+                To:{" "}
+                <span className="inline-block min-w-64 border-b border-black px-3 not-italic">
+                  {(data as any).attachment_to ?? attachmentTo ?? ""}
+                </span>
+              </p>
+              <p className="mt-5 italic underline">
+                Address:{" "}
+                <span className="inline-block min-w-64 border-b border-black px-3 not-italic">
+                  {(data as any).attachment_address ?? attachmentAddress ?? ""}
+                </span>
+              </p>
+              <p className="mt-5 italic underline">
+                Case:-{" "}
+                <span className="inline-block min-w-64 border-b border-black px-3 not-italic">
+                  {(data as any).attachment_case ?? attachmentCase ?? ""}
+                </span>
+              </p>
+              <div className="mt-8 min-h-[260px]">
+                <p className="mb-3 italic underline">Body :</p>
+                <p className="whitespace-pre-line">
+                  {(data as any).attachment_body ?? attachmentBody ?? ""}
+                </p>
+              </div>
+            </div>
+
+            <div className="relative min-h-[190px]">
+              {signerUrl(data.records_signer, "stamp") ? (
+                <img
+                  src={signerUrl(data.records_signer, "stamp")}
+                  alt="Records Office stamp"
+                  className="absolute left-1/3 top-8 z-20 h-36 w-36 -translate-x-1/2 object-contain opacity-95"
+                />
+              ) : null}
+              <div className="absolute right-0 top-0 text-right font-bold">
+                <p>Nagaa Wajjiin</p>
+                <SignatureLine title="" signer={data.final_manager_signer} />
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-3 underline">G.G</p>
+              {(
+                ((data as any).attachment_gg as string[] | undefined) ??
+                attachmentGg
+              )
+                .filter((item) => item?.trim())
+                .map((item, index) => (
+                  <p key={`${item}-${index}`} className="mb-2">
+                    ➢&nbsp;&nbsp; {item}
+                  </p>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="flex flex-wrap gap-2 print:hidden">
         {allowedActions.map((a) => {
           const Icon = a.icon;
@@ -1083,6 +1426,55 @@ export default function ProcurementDetailPage() {
                 }
                 if (a.action === "manager_approve") {
                   setForwardToRole(technicalRecommendation.value);
+                  setSelectedDepartmentId(
+                    String((data as any).department_id ?? ""),
+                  );
+                  setSelectedTeamLeaderId(
+                    String((data as any).assigned_team_leader_id ?? ""),
+                  );
+                }
+                if (a.action === "asset_team_approve") {
+                  setSelectedBudgetDepartmentId(
+                    String((data as any).budget_department_id ?? ""),
+                  );
+                  setSelectedBudgetTeamLeaderId(
+                    String((data as any).budget_team_leader_id ?? ""),
+                  );
+                }
+                if (a.action === "records_process") {
+                  setReferenceNo(String((data as any).reference_no ?? ""));
+                  setOfficialDateEc(
+                    String((data as any).official_date_ec ?? ""),
+                  );
+                  setAttachmentReferenceNo(
+                    String((data as any).attachment_reference_no ?? ""),
+                  );
+                  setAttachmentOfficialDateEc(
+                    String((data as any).attachment_official_date_ec ?? ""),
+                  );
+                }
+                if (a.action === "final_manager_approve") {
+                  setShowAttachmentDraftForm(hasOfficialAttachmentDraft);
+                  setAttachmentTo(String((data as any).attachment_to ?? ""));
+                  setAttachmentAddress(
+                    String((data as any).attachment_address ?? ""),
+                  );
+                  setAttachmentCase(
+                    String((data as any).attachment_case ?? ""),
+                  );
+                  setAttachmentBody(
+                    String((data as any).attachment_body ?? ""),
+                  );
+                  setAttachmentGg(
+                    Array.isArray((data as any).attachment_gg) &&
+                      (data as any).attachment_gg.length
+                      ? (data as any).attachment_gg
+                      : [
+                          "Waajjiraa Hojii Gaggeessaa tiif",
+                          "Kuta Bittaa tiif",
+                          "Adamaa",
+                        ],
+                  );
                 }
                 setModalAction(a);
               }}
@@ -1119,12 +1511,16 @@ export default function ProcurementDetailPage() {
                 <Label>Select receiver</Label>
                 <select
                   className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  value={receiverType}
-                  onChange={(e) => setReceiverType(e.target.value)}
+                  value={receiverUserId}
+                  onChange={(e) => setReceiverUserId(e.target.value)}
                 >
-                  <option value="manager">Manager</option>
-                  <option value="service_head">Service Head</option>
-                  <option value="development_branch">Development Branch</option>
+                  <option value="">Select Manager / Head</option>
+                  {(initialApproversQuery.data ?? []).map((user: any) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} —{" "}
+                      {user.display_role ?? user.role ?? "Approver"}
+                    </option>
+                  ))}
                 </select>
               </div>
               <Textarea
@@ -1140,10 +1536,9 @@ export default function ProcurementDetailPage() {
                   onClick={() =>
                     runAction({
                       action: "submit",
+                      send_to_user_id: receiverUserId,
                       receiver_type: receiverType,
-                      note:
-                        note ||
-                        `Submitted to ${receiverType.replaceAll("_", " ")}`,
+                      note: note || "Submitted to selected Manager / Head",
                     })
                   }
                 >
@@ -1157,21 +1552,57 @@ export default function ProcurementDetailPage() {
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-primary">
                 {technicalRecommendation.message}
               </div>
-              <div>
-                <Label>Forward To</Label>
-                <select
-                  className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  value={forwardToRole}
-                  onChange={(e) => setForwardToRole(e.target.value)}
-                >
-                  <option value="asset_team_leader">Asset Team Leader</option>
-                  <option value="machinery_team_leader">
-                    Machinery Team Leader
-                  </option>
-                </select>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Current category: {displayProcurementCategory(data) || "-"}. Suggested receiver: {technicalRecommendation.label}.
-                </p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Department</Label>
+                  <select
+                    className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={selectedDepartmentId}
+                    onChange={(e) => {
+                      setSelectedDepartmentId(e.target.value);
+                      setSelectedTeamLeaderId("");
+                    }}
+                  >
+                    <option value="">Select department</option>
+                    {(departmentsQuery.data ?? []).map((department: any) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                        {department.office?.name
+                          ? ` — ${department.office.name}`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Fixed Asset requests show Asset Department. Machinery
+                    requests show Machinery Department.
+                  </p>
+                </div>
+                <div>
+                  <Label>Department Team Leader</Label>
+                  <select
+                    className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={selectedTeamLeaderId}
+                    disabled={
+                      !selectedDepartmentId ||
+                      departmentTeamLeadersQuery.isLoading
+                    }
+                    onChange={(e) => setSelectedTeamLeaderId(e.target.value)}
+                  >
+                    <option value="">
+                      {departmentTeamLeadersQuery.isLoading
+                        ? "Loading Team Leaders..."
+                        : "Select Team Leader"}
+                    </option>
+                    {(departmentTeamLeadersQuery.data ?? []).map(
+                      (leader: any) => (
+                        <option key={leader.id} value={leader.id}>
+                          {leader.name} — {leader.display_role ?? "Team Leader"}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </div>
               </div>
               <div>
                 <Label>Additional Note</Label>
@@ -1186,10 +1617,16 @@ export default function ProcurementDetailPage() {
                   Cancel
                 </Button>
                 <Button
+                  disabled={
+                    !selectedDepartmentId ||
+                    !selectedTeamLeaderId ||
+                    actionMutation.isPending
+                  }
                   onClick={() =>
                     runAction({
                       action: "manager_approve",
-                      forward_to_role: forwardToRole,
+                      department_id: selectedDepartmentId,
+                      team_leader_user_id: selectedTeamLeaderId,
                     })
                   }
                 >
@@ -1264,6 +1701,59 @@ export default function ProcurementDetailPage() {
               >
                 Add Item
               </Button>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Budget Department</Label>
+                  <select
+                    className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={selectedBudgetDepartmentId}
+                    onChange={(e) => {
+                      setSelectedBudgetDepartmentId(e.target.value);
+                      setSelectedBudgetTeamLeaderId("");
+                    }}
+                  >
+                    <option value="">Select Budget Department</option>
+                    {(budgetDepartmentsQuery.data ?? []).map(
+                      (department: any) => (
+                        <option key={department.id} value={department.id}>
+                          {department.name}
+                          {department.office?.name
+                            ? ` — ${department.office.name}`
+                            : ""}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <Label>Budget Department Team Leader</Label>
+                  <select
+                    className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={selectedBudgetTeamLeaderId}
+                    disabled={
+                      !selectedBudgetDepartmentId ||
+                      budgetDepartmentTeamLeadersQuery.isLoading
+                    }
+                    onChange={(e) =>
+                      setSelectedBudgetTeamLeaderId(e.target.value)
+                    }
+                  >
+                    <option value="">
+                      {budgetDepartmentTeamLeadersQuery.isLoading
+                        ? "Loading Team Leaders..."
+                        : "Select Budget Team Leader"}
+                    </option>
+                    {(budgetDepartmentTeamLeadersQuery.data ?? []).map(
+                      (leader: any) => (
+                        <option key={leader.id} value={leader.id}>
+                          {leader.name} — {leader.display_role ?? "Team Leader"}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </div>
+              </div>
               <div>
                 <Label>Additional Note</Label>
                 <Textarea
@@ -1277,9 +1767,16 @@ export default function ProcurementDetailPage() {
                   Cancel
                 </Button>
                 <Button
+                  disabled={
+                    !selectedBudgetDepartmentId ||
+                    !selectedBudgetTeamLeaderId ||
+                    actionMutation.isPending
+                  }
                   onClick={() =>
                     runAction({
                       action: "asset_team_approve",
+                      budget_department_id: selectedBudgetDepartmentId,
+                      budget_team_leader_user_id: selectedBudgetTeamLeaderId,
                       items: items.map((x) => ({
                         ...x,
                         estimated_unit_cost: 0,
@@ -1342,7 +1839,9 @@ export default function ProcurementDetailPage() {
                     <select
                       className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
                       value={officialDateParts.day}
-                      onChange={(e) => setOfficialDatePart("day", e.target.value)}
+                      onChange={(e) =>
+                        setOfficialDatePart("day", e.target.value)
+                      }
                     >
                       <option value="">Day</option>
                       {ETHIOPIAN_DAYS.map((day) => (
@@ -1354,7 +1853,9 @@ export default function ProcurementDetailPage() {
                     <select
                       className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
                       value={officialDateParts.month}
-                      onChange={(e) => setOfficialDatePart("month", e.target.value)}
+                      onChange={(e) =>
+                        setOfficialDatePart("month", e.target.value)
+                      }
                     >
                       <option value="">Month</option>
                       {ETHIOPIAN_MONTHS.map((month) => (
@@ -1366,7 +1867,9 @@ export default function ProcurementDetailPage() {
                     <select
                       className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
                       value={officialDateParts.year}
-                      onChange={(e) => setOfficialDatePart("year", e.target.value)}
+                      onChange={(e) =>
+                        setOfficialDatePart("year", e.target.value)
+                      }
                     >
                       <option value="">Year</option>
                       {ETHIOPIAN_YEARS.map((year) => (
@@ -1381,6 +1884,84 @@ export default function ProcurementDetailPage() {
                   </p>
                 </div>
               </div>
+              {hasOfficialAttachmentDraft ? (
+                <div className="rounded-xl border bg-muted/20 p-4">
+                  <p className="mb-3 text-sm font-semibold">
+                    Attachment Lakk & Guyyaa
+                  </p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <Label>Attachment Reference No (Lakk)</Label>
+                      <Input
+                        value={attachmentReferenceNo}
+                        onChange={(e) =>
+                          setAttachmentReferenceNo(e.target.value)
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label>
+                        Attachment Guyyaa / Date (Ethiopian Calendar)
+                      </Label>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <select
+                          className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                          value={attachmentOfficialDateParts.day}
+                          onChange={(e) =>
+                            setAttachmentOfficialDatePart("day", e.target.value)
+                          }
+                        >
+                          <option value="">Day</option>
+                          {ETHIOPIAN_DAYS.map((day) => (
+                            <option key={day} value={day}>
+                              {day}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                          value={attachmentOfficialDateParts.month}
+                          onChange={(e) =>
+                            setAttachmentOfficialDatePart(
+                              "month",
+                              e.target.value,
+                            )
+                          }
+                        >
+                          <option value="">Month</option>
+                          {ETHIOPIAN_MONTHS.map((month) => (
+                            <option key={month.value} value={month.value}>
+                              {month.label}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+                          value={attachmentOfficialDateParts.year}
+                          onChange={(e) =>
+                            setAttachmentOfficialDatePart(
+                              "year",
+                              e.target.value,
+                            )
+                          }
+                        >
+                          <option value="">Year</option>
+                          {ETHIOPIAN_YEARS.map((year) => (
+                            <option key={year} value={year}>
+                              {year}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Saved as E.C date:{" "}
+                        {attachmentOfficialDateEc || "dd/mm/yyyy"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               <div>
                 <Label>Additional Note</Label>
                 <Textarea
@@ -1399,10 +1980,120 @@ export default function ProcurementDetailPage() {
                       action: "records_process",
                       reference_no: referenceNo,
                       official_date_ec: officialDateEc,
+                      attachment_reference_no: attachmentReferenceNo,
+                      attachment_official_date_ec: attachmentOfficialDateEc,
                     })
                   }
                 >
                   Stamp & Process
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {modalAction?.action === "final_manager_approve" ? (
+            <div className="space-y-4">
+              {!showAttachmentDraftForm ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowAttachmentDraftForm(true)}
+                >
+                  Add Optional Attachment
+                </Button>
+              ) : (
+                <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <Label>To</Label>
+                      <Input
+                        value={attachmentTo}
+                        onChange={(e) => setAttachmentTo(e.target.value)}
+                        placeholder="To"
+                      />
+                    </div>
+                    <div>
+                      <Label>Address</Label>
+                      <Input
+                        value={attachmentAddress}
+                        onChange={(e) => setAttachmentAddress(e.target.value)}
+                        placeholder="Address"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Case</Label>
+                    <Input
+                      value={attachmentCase}
+                      onChange={(e) => setAttachmentCase(e.target.value)}
+                      placeholder="Case"
+                    />
+                  </div>
+                  <div>
+                    <Label>Body</Label>
+                    <Textarea
+                      className="min-h-32"
+                      value={attachmentBody}
+                      onChange={(e) => setAttachmentBody(e.target.value)}
+                      placeholder="Body"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>G.G</Label>
+                    {attachmentGg.map((item, index) => (
+                      <Input
+                        key={index}
+                        value={item}
+                        onChange={(e) =>
+                          setAttachmentGg((current) =>
+                            current.map((value, itemIndex) =>
+                              itemIndex === index ? e.target.value : value,
+                            ),
+                          )
+                        }
+                        placeholder="G.G recipient"
+                      />
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setAttachmentGg((current) => [...current, ""])
+                      }
+                    >
+                      Add G.G
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <div>
+                <Label>Additional Note</Label>
+                <Textarea
+                  className="mt-2"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setModalAction(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  disabled={
+                    actionMutation.isPending ||
+                    (showAttachmentDraftForm && !isAttachmentComplete)
+                  }
+                  onClick={() =>
+                    runAction({
+                      action: "final_manager_approve",
+                      ...(showAttachmentDraftForm && isAttachmentComplete
+                        ? officialAttachmentPayload
+                        : {}),
+                    })
+                  }
+                >
+                  Final Approve
                 </Button>
               </div>
             </div>
@@ -1415,6 +2106,7 @@ export default function ProcurementDetailPage() {
             "asset_team_approve",
             "assign_budget_code",
             "records_process",
+            "final_manager_approve",
           ].includes(modalAction.action) ? (
             <div className="space-y-4">
               <div>

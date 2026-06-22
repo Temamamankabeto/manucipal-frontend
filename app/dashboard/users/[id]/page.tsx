@@ -217,6 +217,7 @@ export default function UserDetailPage() {
           <InfoItem label="Role" value={role} icon={ShieldCheck} />
           <InfoItem label="Level" value={levelOf(user)} icon={BadgeCheck} />
           <InfoItem label="Office" value={officeLabel(user)} icon={MapPin} />
+          <InfoItem label="Department" value={user.department?.name} icon={MapPin} />
           <InfoItem label="Address" value={user.address} icon={MapPin} />
           <InfoItem label="Last Login" value={formatDate(user.last_login_at)} icon={CalendarDays} />
           <InfoItem label="Created At" value={formatDate(user.created_at)} icon={CalendarDays} />

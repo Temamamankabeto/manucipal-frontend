@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Plus, Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +21,15 @@ import {
 import { usePaymentRequests } from "@/hooks/payment/use-payment";
 import { authService } from "@/services/auth/auth.service";
 
+function translationKey(value?: string | null) {
+  return String(value ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 function normalizeRole(value?: string | null) {
   return String(value ?? "")
     .toLowerCase()
@@ -28,7 +39,26 @@ function normalizeRole(value?: string | null) {
     .replace(/-+/g, "-");
 }
 
+function useDbTranslation() {
+  const { t, i18n } = useTranslation();
+
+  return (value?: string | null) => {
+    const text = String(value ?? "");
+    const key = translationKey(text);
+
+    if (!key) return text;
+
+    // This keeps the payment page subscribed to i18n language changes.
+    void i18n.language;
+
+    const translated = t(key);
+    return translated && translated !== key ? translated : text;
+  };
+}
+
 export default function PaymentPage() {
+  const router = useRouter();
+  const tt = useDbTranslation();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -38,21 +68,7 @@ export default function PaymentPage() {
 
   const roles = authService.getStoredRoles().map(normalizeRole);
   const isFinanceAccountant = roles.includes("finance-accountant") || roles.includes("finance") || roles.includes("accountant");
-  const canCreatePayment = roles.some((role) =>
-    [
-      "super-admin",
-      "manager",
-      "head-of-development-branch",
-      "head-development-branch",
-      "head-of-service-branch",
-      "head-service-branch",
-      "planning-budget-team-leader",
-      "planning-and-budget-team-leader",
-      "payment-requester",
-      "record-office",
-      "records-office",
-    ].includes(role)
-  );
+  const canCreatePayment = roles.length > 0 || Boolean(authService.getStoredUser());
   const queryStatus = status || (isFinanceAccountant ? "sent_to_finance" : "");
   const query = usePaymentRequests({ search, status: queryStatus, page, per_page: 10 });
   const rows = query.data?.data ?? [];
@@ -62,11 +78,12 @@ export default function PaymentPage() {
     setPage(1);
   }, [search, queryStatus]);
 
-  const title = useMemo(() => {
-    if (queryStatus === "sent_to_finance") return "Pending Finance";
-    if (queryStatus === "paid") return "Paid Payments";
-    return "Payment Requests";
-  }, [queryStatus]);
+  const title =
+    queryStatus === "sent_to_finance"
+      ? tt("pending_finance")
+      : queryStatus === "paid"
+        ? tt("paid_payments")
+        : tt("payment_requests");
 
   return (
     <div className="space-y-6">
@@ -74,7 +91,7 @@ export default function PaymentPage() {
         <div>
           <h1 className="text-2xl font-bold">{title}</h1>
           <p className="text-sm text-muted-foreground">
-            Payment workflow from requester to finance.
+            {tt("payment_workflow_from_requester_to_finance")}
           </p>
         </div>
 
@@ -82,7 +99,7 @@ export default function PaymentPage() {
           <Button asChild>
             <Link href="/dashboard/payment/create">
               <Plus className="mr-2 h-4 w-4" />
-              New Payment Request
+              {tt("new_payment_request")}
             </Link>
           </Button>
         ) : null}
@@ -90,7 +107,7 @@ export default function PaymentPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Requests</CardTitle>
+          <CardTitle>{tt("requests")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {isFinanceAccountant ? (
@@ -100,14 +117,14 @@ export default function PaymentPage() {
                 variant={queryStatus === "sent_to_finance" ? "default" : "outline"}
                 onClick={() => setStatus("sent_to_finance")}
               >
-                Pending Finance
+                {tt("pending_finance")}
               </Button>
               <Button
                 type="button"
                 variant={queryStatus === "paid" ? "default" : "outline"}
                 onClick={() => setStatus("paid")}
               >
-                Paid Payments
+                {tt("paid_payments")}
               </Button>
             </div>
           ) : null}
@@ -116,7 +133,7 @@ export default function PaymentPage() {
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9"
-              placeholder="Search payment no, title, reference"
+              placeholder={tt("search_payment_no_payment_type_reference")}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -126,13 +143,13 @@ export default function PaymentPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Payment No</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Approved Amount</TableHead>
-                  <TableHead>Paid Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>Action</TableHead>
+                  <TableHead>{tt("payment_no")}</TableHead>
+                  <TableHead>{tt("payment_type")}</TableHead>
+                  <TableHead>{tt("approved_amount")}</TableHead>
+                  <TableHead>{tt("paid_amount")}</TableHead>
+                  <TableHead>{tt("status")}</TableHead>
+                  <TableHead>{tt("reference")}</TableHead>
+                  <TableHead>{tt("action")}</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -140,18 +157,23 @@ export default function PaymentPage() {
                 {rows.map((request) => (
                   <TableRow key={request.id}>
                     <TableCell className="font-medium">{request.payment_no}</TableCell>
-                    <TableCell>{request.title}</TableCell>
+                    <TableCell>{tt(request.payment_type?.name ?? request.title ?? "-")}</TableCell>
                     <TableCell>{Number(request.amount || 0).toFixed(2)}</TableCell>
                     <TableCell>{request.paid_amount ? Number(request.paid_amount).toFixed(2) : "-"}</TableCell>
                     <TableCell>
                       <Badge variant={request.status === "rejected" ? "destructive" : "secondary"}>
-                        {request.status.replaceAll("_", " ")}
+                        {tt(request.status?.replaceAll("_", " ") ?? "-")}
                       </Badge>
                     </TableCell>
                     <TableCell>{request.reference_no ?? "-"}</TableCell>
                     <TableCell>
-                      <Button asChild size="sm" variant="outline">
-                        <Link href={`/dashboard/payment/${request.id}`}>Open</Link>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => router.push(`/dashboard/payment/${request.id}`)}
+                      >
+                        {tt("open")}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -160,7 +182,7 @@ export default function PaymentPage() {
                 {rows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                      No payment requests found.
+                      {tt("no_payment_requests_found")}
                     </TableCell>
                   </TableRow>
                 ) : null}
@@ -171,7 +193,7 @@ export default function PaymentPage() {
           {meta && meta.last_page > 1 ? (
             <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
-                Showing page {meta.current_page} of {meta.last_page} • {meta.total} request(s)
+                {`${tt("Showing page")} ${meta.current_page} ${tt("of")} ${meta.last_page} · ${meta.total} ${tt("requests")}`}
               </p>
               <div className="flex gap-2">
                 <Button
@@ -181,7 +203,7 @@ export default function PaymentPage() {
                   disabled={page <= 1 || query.isFetching}
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                 >
-                  Previous
+                  {tt("previous")}
                 </Button>
                 <Button
                   type="button"
@@ -190,7 +212,7 @@ export default function PaymentPage() {
                   disabled={page >= meta.last_page || query.isFetching}
                   onClick={() => setPage((current) => Math.min(meta.last_page, current + 1))}
                 >
-                  Next
+                  {tt("next")}
                 </Button>
               </div>
             </div>

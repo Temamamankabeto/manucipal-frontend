@@ -26,7 +26,7 @@ export function useUnreadNotificationsQuery() {
     queryKey: [...QUERY_KEY, "unread-count"],
     queryFn: async () => {
       const { data } = await api.get("/notifications/unread-count");
-      return data;
+      return data?.data ?? data;
     },
   });
 }

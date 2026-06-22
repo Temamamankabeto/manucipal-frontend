@@ -28,11 +28,6 @@ import type { Budget, BudgetPayload } from "@/types/budget/budget.type";
 const LOW_BUDGET_THRESHOLD = 5000;
 
 
-const BUDGET_MANAGER_ROLES = new Set([
-  "planning-budget-team-leader",
-  "planning-and-budget-team-leader",
-]);
-
 function normalizeRole(role?: string | null) {
   return String(role ?? "")
     .toLowerCase()
@@ -95,9 +90,15 @@ export default function BudgetsPage() {
   const [form, setForm] = useState<BudgetPayload>(() => makeEmptyForm());
 
   const storedUser = authService.getStoredUser();
-  const role = authService.getStoredRoles()[0] ?? storedUser?.role ?? "";
-  const normalizedRole = normalizeRole(role);
-  const canManageBudget = BUDGET_MANAGER_ROLES.has(normalizedRole);
+  const storedRoles = authService.getStoredRoles();
+  const normalizedRoles = storedRoles.length
+    ? storedRoles.map((item) => normalizeRole(item))
+    : [normalizeRole(storedUser?.role)];
+  const departmentName = normalizeRole(storedUser?.department?.name);
+  const isBudgetDepartment = departmentName.includes("budget") || departmentName.includes("baajata");
+  const canManageBudget =
+    normalizedRoles.includes("super-admin") ||
+    (normalizedRoles.includes("team-leader") && isBudgetDepartment);
 
   const fiscalYearsQuery = useBudgetFiscalYears();
   const fiscalYears = fiscalYearsQuery.data ?? [];

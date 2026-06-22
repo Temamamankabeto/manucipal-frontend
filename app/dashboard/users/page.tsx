@@ -65,6 +65,7 @@ import {
 import {
   useCreateUserMutation,
   useDeleteUserMutation,
+  useDepartmentsLiteQuery,
   useOfficesLiteQuery,
   useResetUserPasswordMutation,
   useToggleUserMutation,
@@ -73,102 +74,107 @@ import {
   useUsersQuery,
 } from "@/hooks";
 
-import { authService } from "@/services/auth/auth.service";
 import { createUserSchema, updateUserSchema } from "@/lib/schemas/user.schema";
 
 import type {
-  AdminLevel,
   CreateUserPayload,
+  DepartmentItem,
   OfficeItem,
-  ProfessionalLevel,
   UpdateUserPayload,
   UserItem,
   UserStatus,
 } from "@/types/user-management/user.type";
 
 type UserForm = (CreateUserPayload | UpdateUserPayload) & {
-  city_id?: number | null;
-  professional_level?: ProfessionalLevel | null;
   signature?: File | null;
   stamp?: File | null;
   titer?: File | null;
 };
 
-const emptyCreate: CreateUserPayload & { city_id?: number | null } = {
+const DEFAULT_ROLE = "Manager";
+
+const DEFAULT_ROLE_OPTIONS = [
+  "Super admin",
+  "Manager",
+  "Head of Development Branch",
+  "Head of Service Branch",
+  "Team Leader",
+  "Expert",
+  "Secretory",
+  "Accountant",
+  "Record Officer",
+];
+
+const ROLE_ALIASES: Record<string, string> = {
+  super_admin: "Super admin",
+  "super admin": "Super admin",
+  "Super Admin": "Super admin",
+  manager: "Manager",
+  head_of_development_branch: "Head of Development Branch",
+  "head of development branch": "Head of Development Branch",
+  head_of_service_branch: "Head of Service Branch",
+  "head of service branch": "Head of Service Branch",
+  team_leader: "Team Leader",
+  "team leader": "Team Leader",
+  "Team leader": "Team Leader",
+  "Team Leader (Department Head)": "Team Leader",
+  expert: "Expert",
+  secretory: "Secretory",
+  secretary: "Secretory",
+  accountant: "Accountant",
+  record_officer: "Record Officer",
+  "record officer": "Record Officer",
+};
+
+function normalizeRoleName(role?: string | null) {
+  if (!role) return null;
+  const trimmed = role.trim();
+  return ROLE_ALIASES[trimmed] ?? ROLE_ALIASES[trimmed.toLowerCase()] ?? trimmed;
+}
+
+function uniqueRoles(roles: string[]) {
+  const source = roles.length > 0 ? roles : DEFAULT_ROLE_OPTIONS;
+  return Array.from(
+    new Set(source.map((role) => normalizeRoleName(role)).filter(Boolean) as string[])
+  );
+}
+
+const emptyCreate: CreateUserPayload = {
   name: "",
   email: "",
   phone: "",
   password: "",
-  role: "Admin",
-  admin_level: "zone",
+  role: DEFAULT_ROLE,
+  admin_level: null,
   professional_level: null,
   address: "",
   office_id: null,
+  department_id: null,
   sub_city_id: null,
   woreda_id: null,
   zone_id: null,
-  city_id: null,
   signature: null,
   stamp: null,
   titer: null,
 };
 
-const emptyEdit: UpdateUserPayload & { city_id?: number | null } = {
+const emptyEdit: UpdateUserPayload = {
   name: "",
   email: "",
   phone: "",
-  role: "Admin",
-  admin_level: "zone",
+  role: DEFAULT_ROLE,
+  admin_level: null,
   professional_level: null,
   address: "",
   office_id: null,
+  department_id: null,
   sub_city_id: null,
   woreda_id: null,
   zone_id: null,
-  city_id: null,
   signature: null,
   stamp: null,
   titer: null,
 };
-
-const levelLabels: Record<AdminLevel, string> = {
-  city: "City level",
-  subcity: "Subcity level",
-  woreda: "Woreda level",
-  zone: "Zone level",
-};
-
-
-function normalizeRoleName(role?: string | null) {
-  return (role || "").toLowerCase().trim();
-}
-
-function isPaymentProcurementRole(role?: string | null) {
-  return [
-    "manager",
-    "head of development branch",
-    "head of service branch",
-    "planning & budget team leader",
-    "planning & budget expert",
-    "payment requester",
-    "procurement requester",
-    "record office",
-    "records office",
-    "finance",
-    "finance accountant",
-    "asset team leader",
-    "machinery team leader",
-  ].includes(normalizeRoleName(role));
-}
-
-function isPlanningBudgetExpert(role?: string | null) {
-  return normalizeRoleName(role) === "planning & budget expert";
-}
-
-function isManagerUserContext(role?: string | null) {
-  return ["manager", "head of development branch", "head of service branch"].includes(normalizeRoleName(role));
-}
-
 
 function numberOrNull(value?: string | null) {
   if (!value || value === "none") return null;
@@ -177,60 +183,34 @@ function numberOrNull(value?: string | null) {
 }
 
 function roleOf(user: UserItem) {
-  if (user.role) return user.role;
   const first = user.roles?.[0];
-  return !first ? "—" : typeof first === "string" ? first : first.name;
+  const rawRole =
+    user.role ??
+    user.display_role ??
+    (!first ? null : typeof first === "string" ? first : first.name);
+
+  return normalizeRoleName(rawRole) ?? "—";
 }
 
-function findOffice(offices: OfficeItem[], id?: number | string | null) {
-  return offices.find((office) => String(office.id) === String(id));
+function selectedRole(roles: string[]) {
+  const normalizedRoles = uniqueRoles(roles);
+  return normalizedRoles.includes(DEFAULT_ROLE) ? DEFAULT_ROLE : normalizedRoles[0] ?? DEFAULT_ROLE;
 }
 
-function findParent(offices: OfficeItem[], id?: number | string | null) {
-  return findOffice(offices, id)?.parent_id ?? null;
-}
+function departmentsForOffice(
+  officeId: number | string | null | undefined,
+  departments: DepartmentItem[] = [],
+) {
+  if (!officeId) return [];
 
-function getCityId(form: UserForm, offices: OfficeItem[]) {
-  if (form.city_id) return Number(form.city_id);
+  const selectedOfficeId = Number(officeId);
 
-  if (form.admin_level === "city" && form.office_id) {
-    return Number(form.office_id);
-  }
-
-  if (form.sub_city_id) {
-    return findParent(offices, form.sub_city_id);
-  }
-
-  if (form.woreda_id) {
-    const subcityId = findParent(offices, form.woreda_id);
-    return findParent(offices, subcityId);
-  }
-
-  if (form.zone_id) {
-    const woredaId = findParent(offices, form.zone_id);
-    const subcityId = findParent(offices, woredaId);
-    return findParent(offices, subcityId);
-  }
-
-  return null;
-}
-
-function getAllowedLevels(currentAdminLevel?: string | null, isSuperAdmin = false): AdminLevel[] {
-  if (isSuperAdmin) return ["city", "subcity", "woreda", "zone"];
-
-  if (currentAdminLevel === "city") return ["subcity", "woreda", "zone"];
-  if (currentAdminLevel === "subcity") return ["woreda", "zone"];
-  if (currentAdminLevel === "woreda") return ["zone"];
-
-  return [];
+  return departments.filter(
+    (department) => Number(department.office_id) === selectedOfficeId,
+  );
 }
 
 export default function UsersPage() {
-  const currentUser = authService.getStoredUser();
-  const currentRole = authService.getStoredRoles()[0] ?? currentUser?.role ?? "";
-  const currentAdminLevel = currentUser?.admin_level ?? null;
-  const currentIsSuperAdmin = String(currentRole).toLowerCase().includes("super");
-
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<UserStatus | "all">("all");
   const [page, setPage] = useState(1);
@@ -242,21 +222,12 @@ export default function UsersPage() {
   const [deleteUser, setDeleteUser] = useState<UserItem | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
 
-  const [createForm, setCreateForm] =
-    useState<CreateUserPayload & { city_id?: number | null }>(emptyCreate);
-
-  const [editForm, setEditForm] =
-    useState<UpdateUserPayload & { city_id?: number | null }>(emptyEdit);
-
+  const [createForm, setCreateForm] = useState<CreateUserPayload>(emptyCreate);
+  const [editForm, setEditForm] = useState<UpdateUserPayload>(emptyEdit);
   const [newPassword, setNewPassword] = useState("");
 
   const params = useMemo(
-    () => ({
-      search,
-      status,
-      page,
-      per_page: 10,
-    }),
+    () => ({ search, status, page, per_page: 10 }),
     [search, status, page]
   );
 
@@ -264,9 +235,24 @@ export default function UsersPage() {
   const roles = useUserRolesLiteQuery().data ?? [];
   const offices = useOfficesLiteQuery().data ?? [];
 
+  const createDepartmentsQuery = useDepartmentsLiteQuery({ office_id: createForm.office_id });
+  const editDepartmentsQuery = useDepartmentsLiteQuery({ office_id: editForm.office_id });
+
+  const createDepartments = useMemo(
+    () => departmentsForOffice(createForm.office_id, createDepartmentsQuery.data ?? []),
+    [createForm.office_id, createDepartmentsQuery.data],
+  );
+
+  const editDepartments = useMemo(
+    () => departmentsForOffice(editForm.office_id, editDepartmentsQuery.data ?? []),
+    [editForm.office_id, editDepartmentsQuery.data],
+  );
+
+  const roleNames = useMemo(() => uniqueRoles(roles.map((role) => role.name)), [roles]);
+
   const createUser = useCreateUserMutation(() => {
     setCreateOpen(false);
-    setCreateForm(emptyCreate);
+    setCreateForm({ ...emptyCreate, role: selectedRole(roleNames) });
     toast.success("User created");
   });
 
@@ -291,12 +277,7 @@ export default function UsersPage() {
   const busy = createUser.isPending || updateUser.isPending || resetPassword.isPending;
 
   function openCreate() {
-    const levels = getAllowedLevels(currentAdminLevel, currentIsSuperAdmin);
-    setCreateForm({
-      ...emptyCreate,
-      admin_level: levels[0] ?? "zone",
-      professional_level: null,
-    });
+    setCreateForm({ ...emptyCreate, role: selectedRole(roleNames) });
     setCreateOpen(true);
   }
 
@@ -307,14 +288,14 @@ export default function UsersPage() {
       email: user.email ?? "",
       phone: user.phone ?? "",
       address: user.address ?? "",
-      role: roleOf(user) || "Admin",
-      admin_level: user.admin_level ?? "zone",
-      professional_level: user.professional_level ?? null,
+      role: roleOf(user) !== "—" ? roleOf(user) : selectedRole(roleNames),
+      admin_level: null,
+      professional_level: null,
       office_id: user.office_id ?? null,
-      sub_city_id: user.sub_city_id ?? null,
-      woreda_id: user.woreda_id ?? null,
-      zone_id: user.zone_id ?? null,
-      city_id: user.office?.type === "city" ? user.office.id : null,
+      department_id: user.department_id ?? null,
+      sub_city_id: null,
+      woreda_id: null,
+      zone_id: null,
       signature: null,
       stamp: null,
       titer: null,
@@ -323,25 +304,20 @@ export default function UsersPage() {
   }
 
   function preparePayload<T extends UserForm>(form: T): T {
-    const workflowRole = isPaymentProcurementRole(form.role);
-
     return {
       ...form,
-      address: workflowRole ? "" : form.address,
-      admin_level: workflowRole ? null : form.admin_level,
-      office_id: workflowRole || form.admin_level === "zone" ? null : form.office_id,
-      sub_city_id: workflowRole ? null : form.sub_city_id,
-      woreda_id: workflowRole ? null : form.woreda_id,
-      zone_id: workflowRole ? null : form.zone_id,
-      professional_level: isPlanningBudgetExpert(form.role) ? form.professional_level : null,
+      admin_level: null,
+      professional_level: null,
+      sub_city_id: null,
+      woreda_id: null,
+      zone_id: null,
+      department_id: form.department_id ?? null,
     };
   }
 
   function submitCreate(event: FormEvent) {
     event.preventDefault();
-
-    const payload = preparePayload(createForm);
-    const parsed = createUserSchema.safeParse(payload);
+    const parsed = createUserSchema.safeParse(preparePayload(createForm));
 
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Invalid user data");
@@ -355,18 +331,14 @@ export default function UsersPage() {
     event.preventDefault();
     if (!selectedUser) return;
 
-    const payload = preparePayload(editForm);
-    const parsed = updateUserSchema.safeParse(payload);
+    const parsed = updateUserSchema.safeParse(preparePayload(editForm));
 
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Invalid user data");
       return;
     }
 
-    updateUser.mutate({
-      id: selectedUser.id,
-      payload: parsed.data,
-    });
+    updateUser.mutate({ id: selectedUser.id, payload: parsed.data });
   }
 
   function submitReset(event: FormEvent) {
@@ -377,10 +349,7 @@ export default function UsersPage() {
       return;
     }
 
-    resetPassword.mutate({
-      id: selectedUser.id,
-      payload: { new_password: newPassword },
-    });
+    resetPassword.mutate({ id: selectedUser.id, payload: { new_password: newPassword } });
   }
 
   return (
@@ -389,7 +358,7 @@ export default function UsersPage() {
         <div>
           <h1 className="text-2xl font-bold">Users</h1>
           <p className="text-muted-foreground">
-            Manage users, roles, and office scope for the municipality system.
+            Manage users with office assignment and optional department scope.
           </p>
         </div>
 
@@ -435,7 +404,6 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
 
-
               <Button variant="outline" onClick={() => usersQuery.refetch()}>
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Refresh
@@ -459,6 +427,8 @@ export default function UsersPage() {
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Office</TableHead>
+                    <TableHead>Department</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -467,10 +437,7 @@ export default function UsersPage() {
                 <TableBody>
                   {rows.length === 0 ? (
                     <TableRow>
-                      <TableCell
-                        colSpan={6}
-                        className="py-8 text-center text-muted-foreground"
-                      >
+                      <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                         No users found
                       </TableCell>
                     </TableRow>
@@ -481,12 +448,10 @@ export default function UsersPage() {
                         <TableCell>{user.email}</TableCell>
                         <TableCell>{user.phone ?? "—"}</TableCell>
                         <TableCell>{roleOf(user)}</TableCell>
+                        <TableCell>{user.office?.name ?? "—"}</TableCell>
+                        <TableCell>{user.department?.name ?? "—"}</TableCell>
                         <TableCell>
-                          <Badge
-                            variant={
-                              user.status === "disabled" ? "secondary" : "default"
-                            }
-                          >
+                          <Badge variant={user.status === "disabled" ? "secondary" : "default"}>
                             {user.status ?? "active"}
                           </Badge>
                         </TableCell>
@@ -507,18 +472,12 @@ export default function UsersPage() {
                                 </Link>
                               </DropdownMenuItem>
 
-                              <DropdownMenuItem
-                                onSelect={() => setTimeout(() => openEdit(user), 0)}
-                              >
+                              <DropdownMenuItem onSelect={() => setTimeout(() => openEdit(user), 0)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
 
-                              <DropdownMenuItem
-                                onSelect={() =>
-                                  setTimeout(() => toggleUser.mutate(user.id), 0)
-                                }
-                              >
+                              <DropdownMenuItem onSelect={() => setTimeout(() => toggleUser.mutate(user.id), 0)}>
                                 {user.status === "disabled" ? (
                                   <UserCheck className="mr-2 h-4 w-4" />
                                 ) : (
@@ -542,12 +501,7 @@ export default function UsersPage() {
 
                               <DropdownMenuSeparator />
 
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onSelect={() =>
-                                  setTimeout(() => setDeleteUser(user), 0)
-                                }
-                              >
+                              <DropdownMenuItem className="text-destructive" onSelect={() => setTimeout(() => setDeleteUser(user), 0)}>
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete
                               </DropdownMenuItem>
@@ -569,21 +523,11 @@ export default function UsersPage() {
               </span>
 
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                >
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
                   Previous
                 </Button>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= meta.last_page}
-                  onClick={() => setPage((current) => current + 1)}
-                >
+                <Button variant="outline" size="sm" disabled={page >= meta.last_page} onClick={() => setPage((current) => current + 1)}>
                   Next
                 </Button>
               </div>
@@ -596,28 +540,21 @@ export default function UsersPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Create User</DialogTitle>
-            <DialogDescription>
-              Create a user with the correct role and administrative scope.
-            </DialogDescription>
+            <DialogDescription>Select role, office, and optional department.</DialogDescription>
           </DialogHeader>
 
           <form className="space-y-4" onSubmit={submitCreate}>
             <UserFields
               form={createForm}
-              roles={roles.map((role) => role.name)}
+              roles={roleNames}
               offices={offices}
-              currentAdminLevel={currentAdminLevel}
-              currentUser={currentUser}
-              currentRole={currentRole}
-              currentIsSuperAdmin={currentIsSuperAdmin}
+              departments={createDepartments}
               onChange={setCreateForm}
               includePassword
             />
 
             <Button className="w-full" disabled={busy}>
-              {createUser.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {createUser.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save user
             </Button>
           </form>
@@ -628,27 +565,20 @@ export default function UsersPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>
-              Update profile, role, level, and administrative scope.
-            </DialogDescription>
+            <DialogDescription>Update profile, role, office, and department.</DialogDescription>
           </DialogHeader>
 
           <form className="space-y-4" onSubmit={submitEdit}>
             <UserFields
               form={editForm}
-              roles={roles.map((role) => role.name)}
+              roles={roleNames}
               offices={offices}
-              currentAdminLevel={currentAdminLevel}
-              currentUser={currentUser}
-              currentRole={currentRole}
-              currentIsSuperAdmin={currentIsSuperAdmin}
+              departments={editDepartments}
               onChange={setEditForm}
             />
 
             <Button className="w-full" disabled={busy}>
-              {updateUser.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {updateUser.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Update user
             </Button>
           </form>
@@ -659,37 +589,24 @@ export default function UsersPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reset Password</DialogTitle>
-            <DialogDescription>
-              Set a new password for {selectedUser?.name ?? "this user"}.
-            </DialogDescription>
+            <DialogDescription>Set a new password for {selectedUser?.name ?? "this user"}.</DialogDescription>
           </DialogHeader>
 
           <form className="space-y-4" onSubmit={submitReset}>
             <div className="grid gap-2">
               <Label>New Password</Label>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                required
-                minLength={8}
-              />
+              <Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required minLength={8} />
             </div>
 
             <Button className="w-full" disabled={resetPassword.isPending}>
-              {resetPassword.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {resetPassword.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Reset password
             </Button>
           </form>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
-        open={Boolean(deleteUser)}
-        onOpenChange={(open) => !open && setDeleteUser(null)}
-      >
+      <AlertDialog open={Boolean(deleteUser)} onOpenChange={(open) => !open && setDeleteUser(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete user?</AlertDialogTitle>
@@ -720,125 +637,27 @@ function UserFields({
   form,
   roles,
   offices,
-  currentAdminLevel,
-  currentUser,
-  currentRole,
-  currentIsSuperAdmin,
+  departments,
   onChange,
   includePassword = false,
 }: {
   form: UserForm;
   roles: string[];
   offices: OfficeItem[];
-  currentAdminLevel?: string | null;
-  currentUser: any;
-  currentRole?: string | null;
-  currentIsSuperAdmin: boolean;
+  departments: DepartmentItem[];
   onChange: (form: any) => void;
   includePassword?: boolean;
 }) {
-  const isSuperAdmin = form.role === "Super Admin";
-  const isWorkflowRole = isPaymentProcurementRole(form.role);
-  const isPlanningExpert = isPlanningBudgetExpert(form.role);
-  const hideMunicipalityScope = isWorkflowRole || isManagerUserContext(currentRole ?? currentUser?.role);
-  const allowedLevels = getAllowedLevels(currentAdminLevel, currentIsSuperAdmin);
-
-  const selectedCityId = getCityId(form, offices);
-
-  const currentWoredaId = currentUser?.woreda_id ?? null;
-  const currentSubcityId = currentUser?.sub_city_id ?? null;
-
-  const isWoredaCreatingZone =
-    currentAdminLevel === "woreda" && form.admin_level === "zone";
-
-  const cities = offices.filter((office) => office.type === "city");
-
-  const subCities = offices.filter(
-    (office) =>
-      office.type === "subcity" && (!selectedCityId || office.parent_id === selectedCityId)
-  );
-
-  const woredas = offices.filter((office) => {
-    if (office.type !== "woreda") return false;
-    if (currentAdminLevel === "subcity") {
-      return String(office.parent_id) === String(currentSubcityId);
-    }
-    return !form.sub_city_id || office.parent_id === form.sub_city_id;
-  });
-
-  const zones = offices.filter((office) => {
-    if (office.type !== "zone") return false;
-
-    if (isWoredaCreatingZone) {
-      return String(office.parent_id) === String(currentWoredaId);
-    }
-
-    return !form.woreda_id || office.parent_id === form.woreda_id;
-  });
-
-  function setRole(role: string) {
+  function setOffice(officeId: number | null) {
     onChange({
       ...form,
-      role,
-      admin_level: role === "Super Admin" || isPaymentProcurementRole(role) ? null : (allowedLevels[0] ?? "zone"),
-      professional_level: isPlanningBudgetExpert(role) ? (form.professional_level ?? "IV") : null,
-      city_id: null,
-      office_id: null,
+      office_id: officeId,
+      department_id: null,
+      admin_level: null,
+      professional_level: null,
       sub_city_id: null,
       woreda_id: null,
       zone_id: null,
-    });
-  }
-
-  function setLevel(level: AdminLevel) {
-    onChange({
-      ...form,
-      admin_level: level,
-      city_id: null,
-      office_id: null,
-      sub_city_id: currentAdminLevel === "subcity" ? currentSubcityId : null,
-      woreda_id: currentAdminLevel === "woreda" ? currentWoredaId : null,
-      zone_id: null,
-    });
-  }
-
-  function setCity(id: number | null) {
-    onChange({
-      ...form,
-      city_id: id,
-      office_id: form.admin_level === "city" ? id : null,
-      sub_city_id: null,
-      woreda_id: null,
-      zone_id: null,
-    });
-  }
-
-  function setSubcity(id: number | null) {
-    onChange({
-      ...form,
-      sub_city_id: id,
-      office_id: form.admin_level === "subcity" ? id : null,
-      woreda_id: null,
-      zone_id: null,
-    });
-  }
-
-  function setWoreda(id: number | null) {
-    onChange({
-      ...form,
-      woreda_id: id,
-      office_id: form.admin_level === "woreda" ? id : null,
-      zone_id: null,
-    });
-  }
-
-  function setZone(id: number | null) {
-    onChange({
-      ...form,
-      zone_id: id,
-      office_id: form.admin_level === "zone" ? null : id,
-      sub_city_id: isWoredaCreatingZone ? currentSubcityId : form.sub_city_id,
-      woreda_id: isWoredaCreatingZone ? currentWoredaId : form.woreda_id,
     });
   }
 
@@ -847,40 +666,30 @@ function UserFields({
       <div className="grid gap-4 md:grid-cols-2">
         <div className="grid gap-2">
           <Label>Name</Label>
-          <Input
-            value={form.name}
-            onChange={(event) => onChange({ ...form, name: event.target.value })}
-            required
-          />
+          <Input value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} required />
         </div>
 
         <div className="grid gap-2">
           <Label>Email</Label>
-          <Input
-            type="email"
-            value={form.email}
-            onChange={(event) => onChange({ ...form, email: event.target.value })}
-            required
-          />
+          <Input type="email" value={form.email} onChange={(event) => onChange({ ...form, email: event.target.value })} required />
         </div>
 
         <div className="grid gap-2">
           <Label>Phone</Label>
-          <Input
-            value={form.phone}
-            onChange={(event) => onChange({ ...form, phone: event.target.value })}
-            required
-          />
+          <Input value={form.phone} onChange={(event) => onChange({ ...form, phone: event.target.value })} required />
         </div>
 
         <div className="grid gap-2">
           <Label>Role</Label>
-          <Select value={form.role || "Admin"} onValueChange={setRole}>
+          <Select
+            value={normalizeRoleName(form.role) ?? selectedRole(roles)}
+            onValueChange={(role) => onChange({ ...form, role })}
+          >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Select role" />
             </SelectTrigger>
             <SelectContent>
-              {roles.map((role) => (
+              {uniqueRoles(roles).map((role) => (
                 <SelectItem key={role} value={role}>
                   {role}
                 </SelectItem>
@@ -888,189 +697,43 @@ function UserFields({
             </SelectContent>
           </Select>
         </div>
+
+        <OfficeSelect label="Office" value={form.office_id} offices={offices} onValueChange={setOffice} />
+
+        <DepartmentSelect
+          value={form.department_id}
+          departments={departments}
+          disabled={!form.office_id}
+          onValueChange={(departmentId) => onChange({ ...form, department_id: departmentId })}
+        />
       </div>
 
-      {!hideMunicipalityScope ? (
-        <div className="grid gap-2">
-          <Label>Address</Label>
-          <Input
-            value={form.address ?? ""}
-            onChange={(event) => onChange({ ...form, address: event.target.value })}
-          />
-        </div>
-      ) : null}
-
-      {isPlanningExpert ? (
-        <div className="grid gap-2">
-          <Label>Level</Label>
-          <Select
-            value={form.professional_level ?? "IV"}
-            onValueChange={(value) =>
-              onChange({ ...form, professional_level: value as ProfessionalLevel })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select level" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="IV">IV</SelectItem>
-              <SelectItem value="III">III</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            This level is required only for Planning & Budget Expert.
-          </p>
-        </div>
-      ) : null}
-
-      {!isSuperAdmin && !hideMunicipalityScope ? (
-        <>
-          <div className="grid gap-2">
-            <Label>Admin Level</Label>
-            <Select
-              value={form.admin_level ?? allowedLevels[0] ?? "zone"}
-              onValueChange={(value) => setLevel(value as AdminLevel)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {allowedLevels.map((level) => (
-                  <SelectItem key={level} value={level}>
-                    {levelLabels[level]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {isWoredaCreatingZone ? (
-            <div className="grid gap-2">
-              <Label>Zone</Label>
-              <Select
-                value={form.zone_id ? String(form.zone_id) : "none"}
-                onValueChange={(next) => setZone(numberOrNull(next))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select zone" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {zones.map((office) => (
-                    <SelectItem key={office.id} value={String(office.id)}>
-                      {office.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                City, Subcity, and Woreda are assigned automatically from your Woreda scope.
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-4">
-              <OfficeSelect
-                label="City"
-                value={selectedCityId}
-                offices={cities}
-                disabled={!currentIsSuperAdmin}
-                onValueChange={setCity}
-              />
-
-              <OfficeSelect
-                label="Subcity"
-                value={form.sub_city_id}
-                offices={subCities}
-                disabled={
-                  !selectedCityId ||
-                  !["subcity", "woreda", "zone"].includes(form.admin_level ?? "")
-                }
-                onValueChange={setSubcity}
-              />
-
-              <OfficeSelect
-                label="Woreda"
-                value={form.woreda_id}
-                offices={woredas}
-                disabled={!form.sub_city_id || !["woreda", "zone"].includes(form.admin_level ?? "")}
-                onValueChange={setWoreda}
-              />
-
-              <OfficeSelect
-                label="Zone"
-                value={form.zone_id}
-                offices={zones}
-                disabled={!form.woreda_id || form.admin_level !== "zone"}
-                onValueChange={setZone}
-              />
-            </div>
-          )}
-        </>
-      ) : null}
+      <div className="grid gap-2">
+        <Label>Address</Label>
+        <Input value={form.address ?? ""} onChange={(event) => onChange({ ...form, address: event.target.value })} />
+      </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="grid gap-2">
           <Label>Signature</Label>
-          <Input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(event) =>
-              onChange({
-                ...form,
-                signature: event.target.files?.[0] ?? null,
-              })
-            }
-          />
-          <p className="text-xs text-muted-foreground">
-            Used on procurement/payment approval documents.
-          </p>
+          <Input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => onChange({ ...form, signature: event.target.files?.[0] ?? null })} />
         </div>
 
         <div className="grid gap-2">
           <Label>Stamp</Label>
-          <Input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(event) =>
-              onChange({
-                ...form,
-                stamp: event.target.files?.[0] ?? null,
-              })
-            }
-          />
-          <p className="text-xs text-muted-foreground">
-            Used by Records Office for official stamping.
-          </p>
+          <Input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => onChange({ ...form, stamp: event.target.files?.[0] ?? null })} />
         </div>
 
         <div className="grid gap-2">
           <Label>Titer</Label>
-          <Input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(event) =>
-              onChange({
-                ...form,
-                titer: event.target.files?.[0] ?? null,
-              })
-            }
-          />
-          <p className="text-xs text-muted-foreground">
-            Personal title stamp image, used beside signatures on official documents.
-          </p>
+          <Input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => onChange({ ...form, titer: event.target.files?.[0] ?? null })} />
         </div>
       </div>
 
       {includePassword && "password" in form ? (
         <div className="grid gap-2">
           <Label>Password</Label>
-          <Input
-            type="password"
-            value={form.password}
-            onChange={(event) => onChange({ ...form, password: event.target.value })}
-            required
-            minLength={8}
-          />
+          <Input type="password" value={form.password} onChange={(event) => onChange({ ...form, password: event.target.value })} required minLength={8} />
         </div>
       ) : null}
     </>
@@ -1081,31 +744,63 @@ function OfficeSelect({
   label,
   value,
   offices,
-  disabled,
   onValueChange,
 }: {
   label: string;
   value?: number | null;
   offices: OfficeItem[];
-  disabled?: boolean;
   onValueChange: (value: number | null) => void;
 }) {
   return (
     <div className="grid gap-2">
       <Label>{label}</Label>
-      <Select
-        value={value ? String(value) : "none"}
-        onValueChange={(next) => onValueChange(numberOrNull(next))}
-        disabled={disabled}
-      >
+      <Select value={value ? String(value) : "none"} onValueChange={(next) => onValueChange(numberOrNull(next))}>
         <SelectTrigger>
           <SelectValue placeholder={`Select ${label}`} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="none">None</SelectItem>
+          <SelectItem value="none" disabled>
+            Select office
+          </SelectItem>
           {offices.map((office) => (
             <SelectItem key={office.id} value={String(office.id)}>
               {office.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function DepartmentSelect({
+  value,
+  departments,
+  disabled,
+  onValueChange,
+}: {
+  value?: number | null;
+  departments: DepartmentItem[];
+  disabled?: boolean;
+  onValueChange: (value: number | null) => void;
+}) {
+  return (
+    <div className="grid gap-2">
+      <Label>Department Optional</Label>
+      <Select value={value ? String(value) : "none"} onValueChange={(next) => onValueChange(numberOrNull(next))} disabled={disabled}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select department" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">None</SelectItem>
+          {!disabled && departments.length === 0 ? (
+            <SelectItem value="__empty" disabled>
+              No departments found for selected office
+            </SelectItem>
+          ) : null}
+          {departments.map((department) => (
+            <SelectItem key={`${department.office_id}-${department.id}`} value={String(department.id)}>
+              {department.name}
             </SelectItem>
           ))}
         </SelectContent>

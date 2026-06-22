@@ -1,13 +1,5 @@
-import WorkflowRoleDashboard from "@/components/dashboards/workflow-role-dashboard";
+import { redirect } from "next/navigation";
 
-export default function ProcurementRequesterDashboardPage() {
-  return (
-    <WorkflowRoleDashboard
-      roleName="Procurement Requester"
-      title="Procurement Request Dashboard"
-      subtitle="Create, submit, and track your procurement requests from one workspace."
-      showPayment={false}
-      canCreateProcurement
-    />
-  );
+export default function DashboardAliasPage() {
+  redirect("/dashboard");
 }

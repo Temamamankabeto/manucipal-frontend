@@ -3,6 +3,7 @@ import type {
   ApiEnvelope,
   Paginated,
   PaymentActionPayload,
+  PaymentDepartment,
   PaymentListParams,
   PaymentPayload,
   PaymentRequest,
@@ -86,8 +87,28 @@ export const paymentService = {
     return Array.isArray(response.data?.data) ? (response.data.data as UserItem[]) : [];
   },
 
-  async planningBudgetExperts() {
+  async planningBudgetExperts(departmentId?: number | string | null) {
+    if (departmentId) {
+      const response = await api.get(`/admin/payment-departments/${departmentId}/experts`);
+      return Array.isArray(response.data?.data) ? (response.data.data as UserItem[]) : [];
+    }
+
     const response = await api.get("/admin/payment-requests-planning-budget-experts");
+    return Array.isArray(response.data?.data) ? (response.data.data as UserItem[]) : [];
+  },
+
+  async departments() {
+    try {
+      const response = await api.get("/admin/payment-departments");
+      return Array.isArray(response.data?.data) ? (response.data.data as PaymentDepartment[]) : [];
+    } catch (error) {
+      const response = await api.get("/admin/departments");
+      return Array.isArray(response.data?.data) ? (response.data.data as PaymentDepartment[]) : [];
+    }
+  },
+
+  async departmentTeamLeaders(departmentId: number | string) {
+    const response = await api.get(`/admin/payment-departments/${departmentId}/team-leaders`);
     return Array.isArray(response.data?.data) ? (response.data.data as UserItem[]) : [];
   },
 
